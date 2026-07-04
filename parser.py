@@ -1,24 +1,283 @@
-from pydantic import BaseModel, Field
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
 
 
-class Zone(BaseModel):
+VALID_ZONE_TYPES = {"normal", "blocked", "restricted", "priority"}
+ZONE_METADATA_KEYS = {"zone", "color", "max_drones"}
+CONNECTION_METADATA_KEYS = {"max_link_capacity"}
+
+
+class ParseError(Exception):
+    def __init__(self, line_number: int, message: str) -> None:
+        self.line_number = line_number
+        self.message = message
+        super().__init__(f"line {line_number}: {message}")
+
+
+@dataclass(frozen=True)
+class Zone:
     name: str
     x: int
     y: int
-    zone_type: str
-    color: str | None
-    max_drones: int
+    zone_type: str = "normal"
+    color: str | None = None
+    max_drones: int = 1
 
 
-class Connection(BaseModel):
-    from_zone: Zone
-    to_zone: Zone
-    max_capacity: int
+@dataclass(frozen=True)
+class Connection:
+    from_zone: str
+    to_zone: str
+    max_capacity: int = 1
 
 
-class Map(BaseModel):
-    drone_nb: int = Field(ge=1)
+@dataclass(frozen=True)
+class Map:
+    drone_nb: int
     zones: dict[str, Zone]
-    connection: list[Connection]
+    connections: list[Connection]
     start_name: str
     end_name: str
+
+
+@dataclass(frozen=True)
+class ParsedLine:
+    number: int
+    content: str
+
+
+def parse_file(path: str | Path) -> Map:
+    with Path(path).open("r", encoding="utf-8") as file:
+        return parse_lines(file.readlines())
+
+
+def parse_lines(raw_lines: list[str]) -> Map:
+    lines = _clean_lines(raw_lines)
+    if not lines:
+        raise ParseError(1, "empty map file")
+
+    drone_nb = _parse_drone_count(lines[0])
+    zones: dict[str, Zone] = {}
+    connections: list[Connection] = []
+    seen_connections: set[frozenset[str]] = set()
+    start_name: str | None = None
+    end_name: str | None = None
+    parsing_connections = False
+
+    for line in lines[1:]:
+        if line.content.startswith("connection:"):
+            parsing_connections = True
+            connection = _parse_connection(line, zones, seen_connections)
+            connections.append(connection)
+            continue
+
+        if parsing_connections:
+            raise ParseError(line.number, "zone declared after connections started")
+
+        if line.content.startswith("start_hub:"):
+            if start_name is not None:
+                raise ParseError(line.number, "duplicate start_hub")
+            zone = _parse_zone(line, "start_hub:", ignore_capacity=True)
+            start_name = zone.name
+            _add_zone(line, zones, zone)
+            continue
+
+        if line.content.startswith("end_hub:"):
+            if end_name is not None:
+                raise ParseError(line.number, "duplicate end_hub")
+            zone = _parse_zone(line, "end_hub:", ignore_capacity=True)
+            end_name = zone.name
+            _add_zone(line, zones, zone)
+            continue
+
+        if line.content.startswith("hub:"):
+            zone = _parse_zone(line, "hub:", ignore_capacity=False)
+            _add_zone(line, zones, zone)
+            continue
+
+        if line.content.startswith("nb_drones:"):
+            raise ParseError(line.number, "nb_drones must appear only once as first directive")
+
+        raise ParseError(line.number, "unknown directive")
+
+    if start_name is None:
+        raise ParseError(lines[0].number, "missing start_hub")
+    if end_name is None:
+        raise ParseError(lines[0].number, "missing end_hub")
+
+    return Map(
+        drone_nb=drone_nb,
+        zones=zones,
+        connections=connections,
+        start_name=start_name,
+        end_name=end_name,
+    )
+
+
+def _clean_lines(raw_lines: list[str]) -> list[ParsedLine]:
+    lines: list[ParsedLine] = []
+    for index, raw_line in enumerate(raw_lines, start=1):
+        content = raw_line.strip()
+        if not content or content.startswith("#"):
+            continue
+        lines.append(ParsedLine(index, content))
+    return lines
+
+
+def _parse_drone_count(line: ParsedLine) -> int:
+    parts = line.content.split()
+    if len(parts) != 2 or parts[0] != "nb_drones:":
+        raise ParseError(line.number, "first directive must be 'nb_drones: <positive_integer>'")
+    return _parse_positive_int(line.number, parts[1], "nb_drones")
+
+
+def _parse_zone(line: ParsedLine, prefix: str, ignore_capacity: bool) -> Zone:
+    body = line.content.removeprefix(prefix).strip()
+    main_part, metadata = _split_metadata(line, body, ZONE_METADATA_KEYS)
+    parts = main_part.split()
+    if len(parts) != 3:
+        raise ParseError(line.number, f"invalid {prefix[:-1]} syntax")
+
+    name = parts[0]
+    _validate_zone_name(line.number, name)
+    x = _parse_int(line.number, parts[1], "x coordinate")
+    y = _parse_int(line.number, parts[2], "y coordinate")
+
+    zone_type = metadata.get("zone", "normal")
+    if zone_type not in VALID_ZONE_TYPES:
+        raise ParseError(line.number, f"invalid zone type '{zone_type}'")
+
+    color = metadata.get("color")
+    if color is not None and not _is_single_word(color):
+        raise ParseError(line.number, "color must be a single-word value")
+
+    max_drones = 1
+    if not ignore_capacity and "max_drones" in metadata:
+        max_drones = _parse_positive_int(line.number, metadata["max_drones"], "max_drones")
+
+    return Zone(
+        name=name,
+        x=x,
+        y=y,
+        zone_type=zone_type,
+        color=color,
+        max_drones=max_drones,
+    )
+
+
+def _parse_connection(
+    line: ParsedLine,
+    zones: dict[str, Zone],
+    seen_connections: set[frozenset[str]],
+) -> Connection:
+    body = line.content.removeprefix("connection:").strip()
+    main_part, metadata = _split_metadata(line, body, CONNECTION_METADATA_KEYS)
+    parts = main_part.split()
+    if len(parts) != 1:
+        raise ParseError(line.number, "invalid connection syntax")
+
+    zone_names = parts[0].split("-")
+    if len(zone_names) != 2 or not zone_names[0] or not zone_names[1]:
+        raise ParseError(line.number, "connection must use '<zone1>-<zone2>' syntax")
+
+    from_zone, to_zone = zone_names
+    if from_zone == to_zone:
+        raise ParseError(line.number, "connection cannot link a zone to itself")
+    if from_zone not in zones:
+        raise ParseError(line.number, f"unknown zone '{from_zone}' in connection")
+    if to_zone not in zones:
+        raise ParseError(line.number, f"unknown zone '{to_zone}' in connection")
+
+    connection_key = frozenset({from_zone, to_zone})
+    if connection_key in seen_connections:
+        raise ParseError(line.number, "duplicate connection")
+    seen_connections.add(connection_key)
+
+    max_capacity = 1
+    if "max_link_capacity" in metadata:
+        max_capacity = _parse_positive_int(
+            line.number,
+            metadata["max_link_capacity"],
+            "max_link_capacity",
+        )
+
+    return Connection(from_zone=from_zone, to_zone=to_zone, max_capacity=max_capacity)
+
+
+def _split_metadata(
+    line: ParsedLine,
+    body: str,
+    allowed_keys: set[str],
+) -> tuple[str, dict[str, str]]:
+    if "[" not in body and "]" not in body:
+        return body.strip(), {}
+    if body.count("[") != 1 or body.count("]") != 1:
+        raise ParseError(line.number, "metadata block must use one matching '[' and ']' pair")
+
+    before, after_open = body.split("[", 1)
+    metadata_content, after = after_open.split("]", 1)
+    if after.strip():
+        raise ParseError(line.number, "unexpected content after metadata block")
+
+    metadata = _parse_metadata(line, metadata_content.strip(), allowed_keys)
+    return before.strip(), metadata
+
+
+def _parse_metadata(
+    line: ParsedLine,
+    metadata_content: str,
+    allowed_keys: set[str],
+) -> dict[str, str]:
+    if not metadata_content:
+        raise ParseError(line.number, "metadata block cannot be empty")
+
+    metadata: dict[str, str] = {}
+    for token in metadata_content.split():
+        if token.count("=") != 1:
+            raise ParseError(line.number, f"invalid metadata token '{token}'")
+        key, value = token.split("=", 1)
+        if not key or not value:
+            raise ParseError(line.number, f"invalid metadata token '{token}'")
+        if key not in allowed_keys:
+            raise ParseError(line.number, f"unexpected metadata key '{key}'")
+        if key in metadata:
+            raise ParseError(line.number, f"duplicate metadata key '{key}'")
+        if not _is_single_word(value):
+            raise ParseError(line.number, f"metadata value for '{key}' must be single-word")
+        metadata[key] = value
+    return metadata
+
+
+def _add_zone(line: ParsedLine, zones: dict[str, Zone], zone: Zone) -> None:
+    if zone.name in zones:
+        raise ParseError(line.number, f"duplicate zone name '{zone.name}'")
+    zones[zone.name] = zone
+
+
+def _validate_zone_name(line_number: int, name: str) -> None:
+    if not name:
+        raise ParseError(line_number, "zone name cannot be empty")
+    if "-" in name:
+        raise ParseError(line_number, "zone names cannot contain dashes")
+    if not _is_single_word(name):
+        raise ParseError(line_number, "zone names cannot contain spaces")
+
+
+def _parse_int(line_number: int, value: str, field_name: str) -> int:
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ParseError(line_number, f"{field_name} must be an integer") from error
+
+
+def _parse_positive_int(line_number: int, value: str, field_name: str) -> int:
+    number = _parse_int(line_number, value, field_name)
+    if number <= 0:
+        raise ParseError(line_number, f"{field_name} must be a positive integer")
+    return number
+
+
+def _is_single_word(value: str) -> bool:
+    return bool(value) and not any(character.isspace() for character in value)

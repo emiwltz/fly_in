@@ -1,56 +1,30 @@
 import sys
 
-
-def parser(content: dict[int, str]):
-    clean_content = {
-        numero: ligne for numero, ligne in content.items() if not ligne.startswith("#")
-    }
-    first = clean_content[1].split()
-    drone_nb = first[1]
-    hubs = {
-        numero: ligne for numero, ligne in clean_content.items() if ligne.startswith("hub")
-    }
-    connections = {
-        numero: ligne
-        for numero, ligne in clean_content.items()
-        if ligne.startswith("connection")
-    }
-    start = {
-        numero: ligne
-        for numero, ligne in clean_content.items()
-        if ligne.startswith("start_hub:")
-    }
-    end = {
-        numero: ligne
-        for numero, ligne in clean_content.items()
-        if ligne.startswith("end_hub:")
-    }
-    return (drone_nb, start, end, hubs, connections)
+from parser import ParseError, parse_file
 
 
-def parsing_hub(hub):
-    pass
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("Usage: python main.py <map_file>", file=sys.stderr)
+        return 1
 
-def parsing_connection(connection):
-    pass
+    try:
+        drone_map = parse_file(sys.argv[1])
+    except ParseError as error:
+        print(f"Parsing error: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"File error: {error}", file=sys.stderr)
+        return 1
 
-def main():
-    path = sys.argv[1]
-    contenue = {}
-    with open(path, "r") as file:
-        for numero, ligne in enumerate(file):
-            contenue[numero] = ligne.strip()
-    drone_nb, start, end, hubs, connections = parser(contenue)
-
-    print("DEBUG_PARSER")
-    print()
-
-    print(f"nb_drone: {drone_nb}")
-    print(f"start: {start}")
-    print(f"end: {end}")
-    # print(f"hubs: {hubs}")
-    # print(f"connections: {connections}")
+    print("Map parsed successfully")
+    print(f"drones: {drone_map.drone_nb}")
+    print(f"start: {drone_map.start_name}")
+    print(f"end: {drone_map.end_name}")
+    print(f"zones: {len(drone_map.zones)}")
+    print(f"connections: {len(drone_map.connections)}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
