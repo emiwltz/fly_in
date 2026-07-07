@@ -1,4 +1,5 @@
 import sys
+from arcade_test import translate_map
 
 from parser import ParseError, parse_file
 
@@ -16,6 +17,8 @@ def main() -> int:
     except OSError as error:
         print(f"File error: {error}", file=sys.stderr)
         return 1
+
+    translate_map(drone_map)
 
     print("Map parsed successfully")
     print(f"drones: {drone_map.drone_nb}")
