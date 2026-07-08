@@ -256,14 +256,14 @@ class GameView(arcade.View):
         for hub in hubs:
             arcade.draw_circle_filled(hub.x, hub.y, HUB_RADIUS, get_hub_color(hub.kind))
             arcade.draw_circle_outline(hub.x, hub.y, HUB_RADIUS, arcade.color.BLACK, 2)
-            arcade.draw_text(
-                hub.name,
-                hub.x,
-                hub.y + HUB_RADIUS + 8,
-                arcade.color.BLACK,
-                font_size=14,
-                anchor_x="center",
-            )
+            # arcade.draw_text(
+            #     hub.name,
+            #     hub.x,
+            #     hub.y + HUB_RADIUS + 8,
+            #     arcade.color.BLACK,
+            #     font_size=14,
+            #     anchor_x="center",
+            # )
 
     def on_key_press(self, symbol: int, modifiers: int) -> None:
         if symbol == arcade.key.SPACE:
