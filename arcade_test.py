@@ -7,7 +7,6 @@ import arcade
 
 from parser import Map, ParseError, parse_file
 
-SCREEN_MARKERS = ("top_left", "top_right", "bottom_left", "bottom_right", "center")
 DRAW_LEFT_RATIO = 0.05
 DRAW_RIGHT_RATIO = 0.95
 DRAW_BOTTOM_RATIO = 0.10
@@ -56,8 +55,16 @@ class DrawableHub:
 
 
 @dataclass(frozen=True)
+class DrawableConnection:
+    start: DrawableHub
+    end: DrawableHub
+    max_capacity: int
+
+
+@dataclass(frozen=True)
 class DrawableMap:
     hubs: list[DrawableHub]
+    connections: list[DrawableConnection]
     bounds: MapBounds
     draw_area: DrawArea
     scale: float
@@ -107,7 +114,16 @@ def translate_map(
 
         hubs.append(DrawableHub(zone.name, x, y, get_hub_kind(drone_map, zone.name)))
 
-    return DrawableMap(hubs, bounds, draw_area, scale)
+    hubs_by_name = {hub.name: hub for hub in hubs}
+    connections = [
+        DrawableConnection(
+            hubs_by_name[connection.from_zone],
+            hubs_by_name[connection.to_zone],
+            connection.max_capacity,
+        )
+        for connection in drone_map.connections
+    ]
+    return DrawableMap(hubs, connections, bounds, draw_area, scale)
 
 
 def calculate_map_bounds(drone_map: Map) -> MapBounds:
@@ -200,11 +216,6 @@ class GameView(arcade.View):
             anchor_x="center",
         )
 
-        screen = calculate_screen_size(self.window.width, self.window.height)
-        for name in SCREEN_MARKERS:
-            x, y = screen[name]
-            self.draw_screen_marker(x, y)
-
         if self.drawable_map is None:
             arcade.draw_text(
                 "No map loaded",
@@ -215,8 +226,10 @@ class GameView(arcade.View):
                 anchor_x="center",
             )
         else:
+            self.draw_connections(self.drawable_map.connections)
             self.draw_hubs(self.drawable_map.hubs)
 
+        screen = calculate_screen_size(self.window.width, self.window.height)
         arcade.draw_text(
             f"screen: {screen['x_max']} x {screen['y_max']}",
             20,
@@ -225,8 +238,19 @@ class GameView(arcade.View):
             font_size=18,
         )
 
-    def draw_screen_marker(self, x: float, y: float) -> None:
-        arcade.draw_circle_filled(x, y, 12, arcade.color.RED)
+    def draw_connections(
+        self,
+        connections: list[DrawableConnection],
+    ) -> None:
+        for connection in connections:
+            arcade.draw_line(
+                connection.start.x,
+                connection.start.y,
+                connection.end.x,
+                connection.end.y,
+                arcade.color.BLACK,
+                3,
+            )
 
     def draw_hubs(self, hubs: list[DrawableHub]) -> None:
         for hub in hubs:
