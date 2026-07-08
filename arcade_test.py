@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass
 
 import arcade
+from arcade.types import Color
 
 from parser import Map, ParseError, parse_file, Zone
 
@@ -52,7 +53,7 @@ class DrawableHub:
     x: float
     y: float
     kind: str
-    color: str
+    color: str | None
     max_drones: int
 
 
@@ -72,13 +73,12 @@ class DrawableMap:
     scale: float
 
 
-def get_hub_kind(drone_map: Map, zone: Zone):
-    zone_type = ""
+def get_hub_kind(drone_map: Map, zone: Zone) -> tuple[str, str | None, int]:
+    zone_type = zone.zone_type
     if zone.name == drone_map.start_name:
         zone_type = "start"
-    if zone.name == drone_map.end_name:
+    elif zone.name == drone_map.end_name:
         zone_type = "end"
-    zone_type = "normal"
     return (zone_type, zone.color, zone.max_drones)
 
 
@@ -105,7 +105,10 @@ def translate_map(
         content_width = logical_width * scale
         content_height = 0.0
     else:
-        scale = min(draw_area.width / logical_width, draw_area.height / logical_height)
+        scale = min(
+            draw_area.width / logical_width,
+            draw_area.height / logical_height,
+        )
         content_width = logical_width * scale
         content_height = logical_height * scale
 
@@ -259,8 +262,19 @@ class GameView(arcade.View):
 
     def draw_hubs(self, hubs: list[DrawableHub]) -> None:
         for hub in hubs:
-            arcade.draw_circle_filled(hub.x, hub.y, HUB_RADIUS, get_hub_color(hub))
-            arcade.draw_circle_outline(hub.x, hub.y, HUB_RADIUS, arcade.color.BLACK, 2)
+            arcade.draw_circle_filled(
+                hub.x,
+                hub.y,
+                HUB_RADIUS,
+                get_hub_color(hub),
+            )
+            arcade.draw_circle_outline(
+                hub.x,
+                hub.y,
+                HUB_RADIUS,
+                arcade.color.BLACK,
+                2,
+            )
             # arcade.draw_text(
             #     hub.name,
             #     hub.x,
@@ -277,8 +291,7 @@ class GameView(arcade.View):
             arcade.exit()
 
 
-def get_hub_color(hub: DrawableHub) -> arcade.Color:
-    print(f"{hub.name}, {hub.kind}")
+def get_hub_color(hub: DrawableHub) -> Color:
     if hub.kind == "start":
         return arcade.color.GREEN
     if hub.kind == "end":

@@ -74,7 +74,10 @@ def parse_lines(raw_lines: list[str]) -> Map:
             continue
 
         if parsing_connections:
-            raise ParseError(line.number, "zone declared after connections started")
+            raise ParseError(
+                line.number,
+                "zone declared after connections started",
+            )
 
         if line.content.startswith("start_hub:"):
             if start_name is not None:
@@ -98,7 +101,10 @@ def parse_lines(raw_lines: list[str]) -> Map:
             continue
 
         if line.content.startswith("nb_drones:"):
-            raise ParseError(line.number, "nb_drones must appear only once as first directive")
+            raise ParseError(
+                line.number,
+                "nb_drones must appear only once as first directive",
+            )
 
         raise ParseError(line.number, "unknown directive")
 
@@ -129,7 +135,10 @@ def _clean_lines(raw_lines: list[str]) -> list[ParsedLine]:
 def _parse_drone_count(line: ParsedLine) -> int:
     parts = line.content.split()
     if len(parts) != 2 or parts[0] != "nb_drones:":
-        raise ParseError(line.number, "first directive must be 'nb_drones: <positive_integer>'")
+        raise ParseError(
+            line.number,
+            "first directive must be 'nb_drones: <positive_integer>'",
+        )
     return _parse_positive_int(line.number, parts[1], "nb_drones")
 
 
@@ -155,7 +164,11 @@ def _parse_zone(line: ParsedLine, prefix: str, ignore_capacity: bool) -> Zone:
 
     max_drones = 1
     if not ignore_capacity and "max_drones" in metadata:
-        max_drones = _parse_positive_int(line.number, metadata["max_drones"], "max_drones")
+        max_drones = _parse_positive_int(
+            line.number,
+            metadata["max_drones"],
+            "max_drones",
+        )
 
     return Zone(
         name=name,
@@ -180,15 +193,27 @@ def _parse_connection(
 
     zone_names = parts[0].split("-")
     if len(zone_names) != 2 or not zone_names[0] or not zone_names[1]:
-        raise ParseError(line.number, "connection must use '<zone1>-<zone2>' syntax")
+        raise ParseError(
+            line.number,
+            "connection must use '<zone1>-<zone2>' syntax",
+        )
 
     from_zone, to_zone = zone_names
     if from_zone == to_zone:
-        raise ParseError(line.number, "connection cannot link a zone to itself")
+        raise ParseError(
+            line.number,
+            "connection cannot link a zone to itself",
+        )
     if from_zone not in zones:
-        raise ParseError(line.number, f"unknown zone '{from_zone}' in connection")
+        raise ParseError(
+            line.number,
+            f"unknown zone '{from_zone}' in connection",
+        )
     if to_zone not in zones:
-        raise ParseError(line.number, f"unknown zone '{to_zone}' in connection")
+        raise ParseError(
+            line.number,
+            f"unknown zone '{to_zone}' in connection",
+        )
 
     connection_key = frozenset({from_zone, to_zone})
     if connection_key in seen_connections:
@@ -203,7 +228,11 @@ def _parse_connection(
             "max_link_capacity",
         )
 
-    return Connection(from_zone=from_zone, to_zone=to_zone, max_capacity=max_capacity)
+    return Connection(
+        from_zone=from_zone,
+        to_zone=to_zone,
+        max_capacity=max_capacity,
+    )
 
 
 def _split_metadata(
@@ -214,12 +243,18 @@ def _split_metadata(
     if "[" not in body and "]" not in body:
         return body.strip(), {}
     if body.count("[") != 1 or body.count("]") != 1:
-        raise ParseError(line.number, "metadata block must use one matching '[' and ']' pair")
+        raise ParseError(
+            line.number,
+            "metadata block must use one matching '[' and ']' pair",
+        )
 
     before, after_open = body.split("[", 1)
     metadata_content, after = after_open.split("]", 1)
     if after.strip():
-        raise ParseError(line.number, "unexpected content after metadata block")
+        raise ParseError(
+            line.number,
+            "unexpected content after metadata block",
+        )
 
     metadata = _parse_metadata(line, metadata_content.strip(), allowed_keys)
     return before.strip(), metadata
@@ -245,7 +280,10 @@ def _parse_metadata(
         if key in metadata:
             raise ParseError(line.number, f"duplicate metadata key '{key}'")
         if not _is_single_word(value):
-            raise ParseError(line.number, f"metadata value for '{key}' must be single-word")
+            raise ParseError(
+                line.number,
+                f"metadata value for '{key}' must be single-word",
+            )
         metadata[key] = value
     return metadata
 
@@ -269,13 +307,19 @@ def _parse_int(line_number: int, value: str, field_name: str) -> int:
     try:
         return int(value)
     except ValueError as error:
-        raise ParseError(line_number, f"{field_name} must be an integer") from error
+        raise ParseError(
+            line_number,
+            f"{field_name} must be an integer",
+        ) from error
 
 
 def _parse_positive_int(line_number: int, value: str, field_name: str) -> int:
     number = _parse_int(line_number, value, field_name)
     if number <= 0:
-        raise ParseError(line_number, f"{field_name} must be a positive integer")
+        raise ParseError(
+            line_number,
+            f"{field_name} must be a positive integer",
+        )
     return number
 
 
