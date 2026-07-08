@@ -5,13 +5,13 @@ from dataclasses import dataclass
 
 import arcade
 
-from parser import Map, ParseError, parse_file
+from parser import Map, ParseError, parse_file, Zone
 
 DRAW_LEFT_RATIO = 0.05
 DRAW_RIGHT_RATIO = 0.95
 DRAW_BOTTOM_RATIO = 0.10
 DRAW_TOP_RATIO = 0.85
-HUB_RADIUS = 18
+HUB_RADIUS = 25
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,8 @@ class DrawableHub:
     x: float
     y: float
     kind: str
+    color: str
+    max_drones: int
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,16 @@ class DrawableMap:
     bounds: MapBounds
     draw_area: DrawArea
     scale: float
+
+
+def get_hub_kind(drone_map: Map, zone: Zone):
+    zone_type = ""
+    if zone.name == drone_map.start_name:
+        zone_type = "start"
+    if zone.name == drone_map.end_name:
+        zone_type = "end"
+    zone_type = "normal"
+    return (zone_type, zone.color, zone.max_drones)
 
 
 def translate_map(
@@ -112,7 +124,8 @@ def translate_map(
         else:
             y = offset_y + (zone.y - bounds.min_y) * scale
 
-        hubs.append(DrawableHub(zone.name, x, y, get_hub_kind(drone_map, zone.name)))
+        zone_type, color, max_drone = get_hub_kind(drone_map, zone)
+        hubs.append(DrawableHub(zone.name, x, y, zone_type, color, max_drone))
 
     hubs_by_name = {hub.name: hub for hub in hubs}
     connections = [
@@ -146,14 +159,6 @@ def calculate_draw_area(screen_width: int, screen_height: int) -> DrawArea:
         bottom=screen_height * DRAW_BOTTOM_RATIO,
         top=screen_height * DRAW_TOP_RATIO,
     )
-
-
-def get_hub_kind(drone_map: Map, zone_name: str) -> str:
-    if zone_name == drone_map.start_name:
-        return "start"
-    if zone_name == drone_map.end_name:
-        return "end"
-    return "normal"
 
 
 def calculate_screen_size(x_max: int, y_max: int) -> dict:
@@ -254,7 +259,7 @@ class GameView(arcade.View):
 
     def draw_hubs(self, hubs: list[DrawableHub]) -> None:
         for hub in hubs:
-            arcade.draw_circle_filled(hub.x, hub.y, HUB_RADIUS, get_hub_color(hub.kind))
+            arcade.draw_circle_filled(hub.x, hub.y, HUB_RADIUS, get_hub_color(hub))
             arcade.draw_circle_outline(hub.x, hub.y, HUB_RADIUS, arcade.color.BLACK, 2)
             # arcade.draw_text(
             #     hub.name,
@@ -272,10 +277,11 @@ class GameView(arcade.View):
             arcade.exit()
 
 
-def get_hub_color(kind: str) -> arcade.Color:
-    if kind == "start":
+def get_hub_color(hub: DrawableHub) -> arcade.Color:
+    print(f"{hub.name}, {hub.kind}")
+    if hub.kind == "start":
         return arcade.color.GREEN
-    if kind == "end":
+    if hub.kind == "end":
         return arcade.color.RED
     return arcade.color.BLUE
 
