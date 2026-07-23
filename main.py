@@ -1,5 +1,6 @@
 import sys
 from arcade_test import translate_map
+from graph import test_graph
 
 from parser import ParseError, parse_file
 
@@ -19,6 +20,7 @@ def main() -> int:
         return 1
 
     translate_map(drone_map)
+    test_graph(drone_map)
 
     print("Map parsed successfully")
     print(f"drones: {drone_map.drone_nb}")
