@@ -1,4 +1,4 @@
-.PHONY: install run debug clean lint lint-strict
+.PHONY: install run debug test clean lint lint-strict
 
 MAP ?= maps/easy/01_linear_path.txt
 
@@ -10,6 +10,9 @@ run:
 
 debug:
 	uv run python -m pdb main.py $(MAP)
+
+test:
+	uv run python -m unittest discover -s tests -v
 
 clean:
 	rm -rf __pycache__ .mypy_cache .pytest_cache

@@ -12,7 +12,9 @@ class Edge:
 class Graph:
     def __init__(self, drone_map: Map) -> None:
         self.zones = drone_map.zones
-        self.adjacency: dict[str, list[Edge]] = {name: [] for name in drone_map.zones}
+        self.adjacency: dict[str, list[Edge]] = {
+            name: [] for name in drone_map.zones
+        }
 
         for connection in drone_map.connections:
             self.adjacency[connection.from_zone].append(
@@ -35,8 +37,3 @@ class Graph:
             return 2
 
         return 1
-
-
-def test_graph(map):
-    graph = Graph(map)
-    print(graph.adjacency)

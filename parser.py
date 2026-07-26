@@ -82,7 +82,12 @@ def parse_lines(raw_lines: list[str]) -> Map:
         if line.content.startswith("start_hub:"):
             if start_name is not None:
                 raise ParseError(line.number, "duplicate start_hub")
-            zone = _parse_zone(line, "start_hub:", ignore_capacity=True)
+            zone = _parse_zone(
+                line,
+                "start_hub:",
+                ignore_capacity=True,
+                default_capacity=drone_nb,
+            )
             start_name = zone.name
             _add_zone(line, zones, zone)
             continue
@@ -90,7 +95,12 @@ def parse_lines(raw_lines: list[str]) -> Map:
         if line.content.startswith("end_hub:"):
             if end_name is not None:
                 raise ParseError(line.number, "duplicate end_hub")
-            zone = _parse_zone(line, "end_hub:", ignore_capacity=True)
+            zone = _parse_zone(
+                line,
+                "end_hub:",
+                ignore_capacity=True,
+                default_capacity=drone_nb,
+            )
             end_name = zone.name
             _add_zone(line, zones, zone)
             continue
@@ -142,7 +152,12 @@ def _parse_drone_count(line: ParsedLine) -> int:
     return _parse_positive_int(line.number, parts[1], "nb_drones")
 
 
-def _parse_zone(line: ParsedLine, prefix: str, ignore_capacity: bool) -> Zone:
+def _parse_zone(
+    line: ParsedLine,
+    prefix: str,
+    ignore_capacity: bool,
+    default_capacity: int = 1,
+) -> Zone:
     body = line.content.removeprefix(prefix).strip()
     main_part, metadata = _split_metadata(line, body, ZONE_METADATA_KEYS)
     parts = main_part.split()
@@ -162,7 +177,7 @@ def _parse_zone(line: ParsedLine, prefix: str, ignore_capacity: bool) -> Zone:
     if color is not None and not _is_single_word(color):
         raise ParseError(line.number, "color must be a single-word value")
 
-    max_drones = 1
+    max_drones = default_capacity
     if not ignore_capacity and "max_drones" in metadata:
         max_drones = _parse_positive_int(
             line.number,

@@ -1,8 +1,9 @@
 import sys
-from arcade_test import translate_map
-from graph import test_graph
 
+from graph import Graph
 from parser import ParseError, parse_file
+from pathfinding import PathNotFoundError, Pathfinder
+from drone import Simulation
 
 
 def main() -> int:
@@ -19,8 +20,17 @@ def main() -> int:
         print(f"File error: {error}", file=sys.stderr)
         return 1
 
-    translate_map(drone_map)
-    test_graph(drone_map)
+    graph = Graph(drone_map)
+    pathfinder = Pathfinder(graph)
+
+    try:
+        path = pathfinder.shortest_path(
+            drone_map.start_name,
+            drone_map.end_name,
+        )
+    except PathNotFoundError as error:
+        print(f"Pathfinding error: {error}", file=sys.stderr)
+        return 1
 
     print("Map parsed successfully")
     print(f"drones: {drone_map.drone_nb}")
@@ -28,6 +38,14 @@ def main() -> int:
     print(f"end: {drone_map.end_name}")
     print(f"zones: {len(drone_map.zones)}")
     print(f"connections: {len(drone_map.connections)}")
+    print(f"shortest path: {' -> '.join(path)}")
+
+    sim = Simulation(drone_map, graph, pathfinder)
+    turns = sim.run()
+
+    for index, moves in enumerate(turns):
+        print(f"Turn {index + 1}: {' '.join(moves)}")
+
     return 0
 
 
