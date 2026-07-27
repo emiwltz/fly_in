@@ -11,8 +11,18 @@ class Pathfinder:
     def __init__(self, graph: Graph) -> None:
         self.graph = graph
 
+    def _zone_penalty(self, zone_name: str) -> int:
+        zone = self.graph.get_zone(zone_name)
+        if zone.zone_type == "priority":
+            return 0
+        return 1
+
     def shortest_path(self, start: str, end: str) -> list[str]:
         distances = {
+            name: float("inf")
+            for name in self.graph.zones
+        }
+        penalties = {
             name: float("inf")
             for name in self.graph.zones
         }
@@ -23,15 +33,23 @@ class Pathfinder:
         }
 
         distances[start] = 0
-        queue = [(0, start)]
+        penalties[start] = 0
+        queue = [(0, 0, start)]
 
         while queue:
-            current_cost, current_zone = heapq.heappop(queue)
+            current_cost, current_penalty, current_zone = (
+                heapq.heappop(queue)
+            )
 
             if current_zone == end:
                 break
 
             if current_cost > distances[current_zone]:
+                continue
+            if (
+                current_cost == distances[current_zone]
+                and current_penalty > penalties[current_zone]
+            ):
                 continue
 
             for edge in self.graph.neighbors(current_zone):
@@ -45,19 +63,34 @@ class Pathfinder:
                     current_cost
                     + self.graph.movement_cost(destination)
                 )
+                new_penalty = (
+                    current_penalty
+                    + self._zone_penalty(destination)
+                )
 
-                if new_cost < distances[destination]:
+                better_cost = new_cost < distances[destination]
+                equal_cost_better_penalty = (
+                    new_cost == distances[destination]
+                    and new_penalty < penalties[destination]
+                )
+
+                if better_cost or equal_cost_better_penalty:
                     distances[destination] = new_cost
+                    penalties[destination] = new_penalty
                     previous[destination] = current_zone
                     heapq.heappush(
                         queue,
-                        (new_cost, destination),
+                        (new_cost, new_penalty, destination),
                     )
 
         return self._build_path(previous, start, end)
 
     def find_shortest_paths(self, start: str, end: str) -> list[list[str]]:
         distances = {
+            name: float("inf")
+            for name in self.graph.zones
+        }
+        penalties = {
             name: float("inf")
             for name in self.graph.zones
         }
@@ -68,12 +101,20 @@ class Pathfinder:
         }
 
         distances[start] = 0
-        queue = [(0, start)]
+        penalties[start] = 0
+        queue = [(0, 0, start)]
 
         while queue:
-            current_cost, current_zone = heapq.heappop(queue)
+            current_cost, current_penalty, current_zone = (
+                heapq.heappop(queue)
+            )
 
             if current_cost > distances[current_zone]:
+                continue
+            if (
+                current_cost == distances[current_zone]
+                and current_penalty > penalties[current_zone]
+            ):
                 continue
 
             for edge in self.graph.neighbors(current_zone):
@@ -87,15 +128,30 @@ class Pathfinder:
                     current_cost
                     + self.graph.movement_cost(destination)
                 )
+                new_penalty = (
+                    current_penalty
+                    + self._zone_penalty(destination)
+                )
 
-                if new_cost < distances[destination]:
+                better_cost = new_cost < distances[destination]
+                equal_cost_better_penalty = (
+                    new_cost == distances[destination]
+                    and new_penalty < penalties[destination]
+                )
+                equal_cost_equal_penalty = (
+                    new_cost == distances[destination]
+                    and new_penalty == penalties[destination]
+                )
+
+                if better_cost or equal_cost_better_penalty:
                     distances[destination] = new_cost
+                    penalties[destination] = new_penalty
                     previous[destination] = [current_zone]
                     heapq.heappush(
                         queue,
-                        (new_cost, destination),
+                        (new_cost, new_penalty, destination),
                     )
-                elif new_cost == distances[destination]:
+                elif equal_cost_equal_penalty:
                     previous[destination].append(current_zone)
 
         if distances[end] == float("inf"):

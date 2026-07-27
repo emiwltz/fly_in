@@ -85,6 +85,9 @@ class Simulation:
 
             if drone.waiting:
                 drone.waiting = False
+                moves.append(
+                    f"D{drone.identifier}-{drone.current_zone_name()}"
+                )
                 continue
 
             current_name = drone.current_zone_name()
@@ -109,10 +112,13 @@ class Simulation:
             next_occupation[next_name] += 1
             drone.path_index += 1
 
-            moves.append(f"D{drone.identifier}-{next_name}")
-
             if next_zone.zone_type == "restricted":
                 drone.waiting = True
+                moves.append(
+                    f"D{drone.identifier}-{current_name}-{next_name}"
+                )
+            else:
+                moves.append(f"D{drone.identifier}-{next_name}")
 
         self.occupation = next_occupation
         return moves
