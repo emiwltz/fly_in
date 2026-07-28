@@ -6,7 +6,10 @@ from dataclasses import dataclass
 import arcade
 from arcade.types import Color
 
+from graph import Graph
 from parser import Map, ParseError, parse_file, Zone
+from pathfinding import Pathfinder
+from drone import Simulation
 
 DRAW_LEFT_RATIO = 0.05
 DRAW_RIGHT_RATIO = 0.95
@@ -188,11 +191,15 @@ def calculate_screen_size(x_max: int, y_max: int) -> dict:
 
 
 class GameView(arcade.View):
-    def __init__(self, drone_map: Map | None = None) -> None:
+    def __init__(
+        self, drone_map: Map | None = None, sim: Simulation | None = None
+    ) -> None:
         super().__init__()
         self.drone_map = drone_map
         self.drawable_map: DrawableMap | None = None
+        self.hubs_by_name: dict[str, DrawableHub] = {}
         self.turn = 0
+        self.sim = sim
 
     def on_show_view(self) -> None:
         self.window.background_color = arcade.color.BEIGE
@@ -204,12 +211,16 @@ class GameView(arcade.View):
     def update_drawable_map(self) -> None:
         if self.drone_map is None:
             self.drawable_map = None
+            self.hubs_by_name = {}
             return
         self.drawable_map = translate_map(
             self.drone_map,
             self.window.width,
             self.window.height,
         )
+        self.hubs_by_name = {
+            hub.name: hub for hub in self.drawable_map.hubs
+        }
 
     def on_draw(self) -> None:
         self.clear()
@@ -236,6 +247,8 @@ class GameView(arcade.View):
         else:
             self.draw_connections(self.drawable_map.connections)
             self.draw_hubs(self.drawable_map.hubs)
+            if self.sim is not None:
+                self.draw_drones(self.sim)
 
         screen = calculate_screen_size(self.window.width, self.window.height)
         arcade.draw_text(
@@ -284,9 +297,21 @@ class GameView(arcade.View):
             #     anchor_x="center",
             # )
 
+    def draw_drones(self, sim: Simulation) -> None:
+        for drone in sim.drones:
+            hub = self.hubs_by_name[drone.current_zone_name()]
+            arcade.draw_circle_filled(
+                hub.x,
+                hub.y,
+                10,
+                arcade.color.YELLOW,
+            )
+
     def on_key_press(self, symbol: int, modifiers: int) -> None:
         if symbol == arcade.key.SPACE:
-            self.turn += 1
+            if self.sim is not None and not self.sim.is_finished():
+                self.sim.make_turn()
+                self.turn = self.sim.turn
         elif symbol == arcade.key.ESCAPE:
             arcade.exit()
 
@@ -320,7 +345,15 @@ def main() -> None:
     drone_map = load_map_from_args()
     window = arcade.Window(title="test")
     window.set_fullscreen()
-    game = GameView(drone_map)
+
+    if drone_map is None:
+        game = GameView(None)
+    else:
+        graph = Graph(drone_map)
+        pathfinder = Pathfinder(graph)
+        sim = Simulation(drone_map, graph, pathfinder)
+        game = GameView(drone_map, sim)
+
     window.show_view(game)
     arcade.run()
 

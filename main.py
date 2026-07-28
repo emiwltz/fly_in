@@ -1,5 +1,6 @@
 import sys
-
+import arcade
+from arcade_test import GameView
 from graph import Graph
 from parser import ParseError, parse_file
 from pathfinding import PathNotFoundError, Pathfinder
@@ -23,19 +24,41 @@ def main() -> int:
     graph = Graph(drone_map)
     pathfinder = Pathfinder(graph)
 
-    try:
-        simulation = Simulation(drone_map, graph, pathfinder)
-    except PathNotFoundError as error:
-        print(f"Pathfinding error: {error}", file=sys.stderr)
-        return 1
 
-    turns = simulation.run()
 
-    for moves in turns:
-        print(" ".join(moves))
+    window = arcade.Window(title="test")
+    window.set_fullscreen()
 
-    return 0
+    if drone_map is None:
+        game = GameView(None)
+    else:
+        graph = Graph(drone_map)
+        pathfinder = Pathfinder(graph)
+        sim = Simulation(drone_map, graph, pathfinder)
+        game = GameView(drone_map, sim)
 
+    window.show_view(game)
+    arcade.run()
+
+
+
+
+
+
+    #
+    # try:
+    #     simulation = Simulation(drone_map, graph, pathfinder)
+    # except PathNotFoundError as error:
+    #     print(f"Pathfinding error: {error}", file=sys.stderr)
+    #     return 1
+    #
+    # turns = simulation.run()
+    #
+    # for moves in turns:
+    #     print(" ".join(moves))
+    #
+    # return 0
+    #
 
 if __name__ == "__main__":
     raise SystemExit(main())
