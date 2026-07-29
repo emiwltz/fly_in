@@ -1,13 +1,20 @@
 import sys
-import arcade
-from arcade_test import GameView
+
+from drone import Simulation
 from graph import Graph
 from parser import ParseError, parse_file
 from pathfinding import PathNotFoundError, Pathfinder
-from drone import Simulation
 
 
 def main() -> int:
+    """Entry point for the drone routing simulation.
+
+    Parses a map file, builds the graph, finds paths, runs the simulation,
+    and prints drone movements in the format 'D<ID>-<zone>' per turn.
+
+    Returns:
+        0 on success, 1 on error.
+    """
     if len(sys.argv) != 2:
         print("Usage: python main.py <map_file>", file=sys.stderr)
         return 1
@@ -24,41 +31,19 @@ def main() -> int:
     graph = Graph(drone_map)
     pathfinder = Pathfinder(graph)
 
+    try:
+        simulation = Simulation(drone_map, graph, pathfinder)
+    except PathNotFoundError as error:
+        print(f"Pathfinding error: {error}", file=sys.stderr)
+        return 1
 
+    turns = simulation.run()
 
-    window = arcade.Window(title="test")
-    window.set_fullscreen()
+    for moves in turns:
+        print(" ".join(moves))
 
-    if drone_map is None:
-        game = GameView(None)
-    else:
-        graph = Graph(drone_map)
-        pathfinder = Pathfinder(graph)
-        sim = Simulation(drone_map, graph, pathfinder)
-        game = GameView(drone_map, sim)
+    return 0
 
-    window.show_view(game)
-    arcade.run()
-
-
-
-
-
-
-    #
-    # try:
-    #     simulation = Simulation(drone_map, graph, pathfinder)
-    # except PathNotFoundError as error:
-    #     print(f"Pathfinding error: {error}", file=sys.stderr)
-    #     return 1
-    #
-    # turns = simulation.run()
-    #
-    # for moves in turns:
-    #     print(" ".join(moves))
-    #
-    # return 0
-    #
 
 if __name__ == "__main__":
     raise SystemExit(main())

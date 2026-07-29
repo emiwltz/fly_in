@@ -4,20 +4,46 @@ from graph import Graph
 
 
 class PathNotFoundError(Exception):
-    pass
+    """Raised when no path exists between two zones."""
 
 
 class Pathfinder:
+    """Finds shortest paths in a Graph using Dijkstra's algorithm.
+
+    Uses a secondary penalty to prefer 'priority' zones at equal cost.
+    Blocked zones are never traversed.
+    """
+
     def __init__(self, graph: Graph) -> None:
+        """Initialize the pathfinder with a graph.
+
+        Args:
+            graph: The graph to search in.
+        """
         self.graph = graph
 
     def _zone_penalty(self, zone_name: str) -> int:
+        """Return 0 for priority zones, 1 for all others."""
         zone = self.graph.get_zone(zone_name)
         if zone.zone_type == "priority":
             return 0
         return 1
 
     def shortest_path(self, start: str, end: str) -> list[str]:
+        """Find the single shortest path from start to end.
+
+        At equal cost, the path with the fewest non-priority zones is chosen.
+
+        Args:
+            start: Name of the start zone.
+            end: Name of the end zone.
+
+        Returns:
+            A list of zone names forming the shortest path.
+
+        Raises:
+            PathNotFoundError: If no path exists.
+        """
         distances = {
             name: float("inf")
             for name in self.graph.zones
@@ -86,6 +112,19 @@ class Pathfinder:
         return self._build_path(previous, start, end)
 
     def find_shortest_paths(self, start: str, end: str) -> list[list[str]]:
+        """Find all shortest paths from start to end.
+
+        Paths are considered equal if they have the same cost and
+        the same priority penalty. Useful for distributing drones
+        across multiple routes.
+
+        Args:
+            start: Name of the start zone.
+            end: Name of the end zone.
+
+        Returns:
+            A list of paths, each a list of zone names. Empty if no path.
+        """
         distances = {
             name: float("inf")
             for name in self.graph.zones
@@ -165,6 +204,19 @@ class Pathfinder:
         start: str,
         end: str,
     ) -> list[str]:
+        """Reconstruct a single path from the predecessor dictionary.
+
+        Args:
+            previous: Maps each zone to its predecessor in the shortest path.
+            start: Name of the start zone.
+            end: Name of the end zone.
+
+        Returns:
+            The reconstructed path as a list of zone names.
+
+        Raises:
+            PathNotFoundError: If the path cannot reach the start zone.
+        """
         path = []
         current: str | None = end
 
@@ -188,6 +240,16 @@ class Pathfinder:
         start: str,
         end: str,
     ) -> list[list[str]]:
+        """Recursively reconstruct all paths from the predecessor dictionary.
+
+        Args:
+            previous: Maps each zone to its list of predecessors.
+            start: Name of the start zone.
+            end: Name of the end zone.
+
+        Returns:
+            A list of all reconstructed paths.
+        """
         if end == start:
             return [[start]]
 

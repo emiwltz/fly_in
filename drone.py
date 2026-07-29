@@ -6,41 +6,86 @@ from pathfinding import Pathfinder, PathNotFoundError
 
 
 class SimulationDeadlockError(Exception):
-    pass
+    """Raised when the simulation can no longer progress."""
 
 
 class Drone:
+    """Represents a single drone moving along a fixed path.
+
+    Attributes:
+        identifier: Unique drone ID (starts at 1).
+        path: The list of zone names this drone must follow.
+        path_index: Current position in the path.
+        waiting: True if the drone is waiting in a restricted zone.
+    """
+
     def __init__(self, identifier: int, path: list[str]) -> None:
+        """Initialize a drone at the start of its path.
+
+        Args:
+            identifier: Unique drone ID (starts at 1).
+            path: The list of zone names from start to end.
+        """
         self.identifier = identifier
         self.path = path
         self.path_index = 0
         self.waiting = False
 
     def current_zone_name(self) -> str:
+        """Return the name of the zone the drone currently occupies."""
         return self.path[self.path_index]
 
     def next_zone_name(self) -> str | None:
+        """Return the next zone name, or None if the drone has arrived."""
         if self.path_index + 1 >= len(self.path):
             return None
         return self.path[self.path_index + 1]
 
     def is_arrived(self) -> bool:
+        """Return True if the drone has reached the end of its path."""
         return self.path_index >= len(self.path) - 1
 
     def remaining_steps(self) -> int:
+        """Return the number of zones left to traverse."""
         return len(self.path) - self.path_index
 
     def can_move(self) -> bool:
+        """Return True if the drone is not waiting in a restricted zone."""
         return not self.waiting
 
 
 class Simulation:
+    """Turn-based simulation of multiple drones on a graph.
+
+    Drones are distributed across all shortest paths in round-robin order.
+    Each turn, drones move simultaneously while respecting zone and
+    connection capacities. Restricted zones require a one-turn wait.
+
+    Attributes:
+        drone_map: The parsed map.
+        graph: The graph built from the map.
+        turn: Current turn number (starts at 0).
+        paths: All shortest paths available for distribution.
+        drones: List of Drone objects.
+        occupation: Current drone count per zone.
+    """
+
     def __init__(
         self,
         drone_map: Map,
         graph: Graph,
         pathfinder: Pathfinder,
     ) -> None:
+        """Initialize the simulation with a map, graph, and pathfinder.
+
+        Args:
+            drone_map: The parsed map.
+            graph: The graph built from the map.
+            pathfinder: The pathfinder used to find shortest paths.
+
+        Raises:
+            PathNotFoundError: If no path exists from start to end.
+        """
         self.drone_map = drone_map
         self.graph = graph
         self.turn = 0
@@ -63,12 +108,33 @@ class Simulation:
         self.occupation[drone_map.start_name] = drone_map.drone_nb
 
     def _find_edge(self, from_zone: str, to_zone: str) -> Edge:
+        """Find the edge between two adjacent zones.
+
+        Args:
+            from_zone: Name of the source zone.
+            to_zone: Name of the destination zone.
+
+        Returns:
+            The Edge connecting the two zones.
+
+        Raises:
+            ValueError: If no edge exists between the zones.
+        """
         for edge in self.graph.neighbors(from_zone):
             if edge.destination == to_zone:
                 return edge
         raise ValueError(f"No edge from {from_zone} to {to_zone}")
 
     def make_turn(self) -> list[str]:
+        """Execute one simulation turn and return the list of movements.
+
+        Drones closest to the end are processed first. Each drone may
+        move to the next zone on its path if capacity allows. Drones
+        waiting in restricted zones are released.
+
+        Returns:
+            A list of movement strings in the format 'D<ID>-<zone>'.
+        """
         self.turn += 1
         moves: list[str] = []
         next_occupation = dict(self.occupation)
@@ -124,9 +190,18 @@ class Simulation:
         return moves
 
     def is_finished(self) -> bool:
+        """Return True if all drones have reached the end zone."""
         return all(drone.is_arrived() for drone in self.drones)
 
     def run(self) -> list[list[str]]:
+        """Run the simulation until all drones arrive.
+
+        Returns:
+            A list of turns, each a list of movement strings.
+
+        Raises:
+            SimulationDeadlockError: If the simulation cannot progress.
+        """
         turns: list[list[str]] = []
         max_path_len = max(len(path) for path in self.paths)
         max_turns = max_path_len * len(self.drones) + 1

@@ -10,6 +10,13 @@ CONNECTION_METADATA_KEYS = {"max_link_capacity"}
 
 
 class ParseError(Exception):
+    """Exception raised when a map file cannot be parsed.
+
+    Attributes:
+        line_number: The 1-based line number where the error occurred.
+        message: A human-readable description of the error.
+    """
+
     def __init__(self, line_number: int, message: str) -> None:
         self.line_number = line_number
         self.message = message
@@ -18,6 +25,17 @@ class ParseError(Exception):
 
 @dataclass(frozen=True)
 class Zone:
+    """Represents a zone in the drone network.
+
+    Attributes:
+        name: Unique zone name.
+        x: Horizontal coordinate.
+        y: Vertical coordinate.
+        zone_type: One of 'normal', 'blocked', 'restricted', 'priority'.
+        color: Optional color string for visualization.
+        max_drones: Maximum simultaneous drones allowed in this zone.
+    """
+
     name: str
     x: int
     y: int
@@ -28,6 +46,14 @@ class Zone:
 
 @dataclass(frozen=True)
 class Connection:
+    """Represents a bidirectional connection between two zones.
+
+    Attributes:
+        from_zone: Name of the first zone.
+        to_zone: Name of the second zone.
+        max_capacity: Max drones traversing this connection per turn.
+    """
+
     from_zone: str
     to_zone: str
     max_capacity: int = 1
@@ -35,6 +61,16 @@ class Connection:
 
 @dataclass(frozen=True)
 class Map:
+    """Represents a fully parsed map.
+
+    Attributes:
+        drone_nb: Number of drones to route.
+        zones: Dictionary mapping zone names to Zone objects.
+        connections: List of all connections in the map.
+        start_name: Name of the start zone.
+        end_name: Name of the end zone.
+    """
+
     drone_nb: int
     zones: dict[str, Zone]
     connections: list[Connection]
@@ -44,16 +80,46 @@ class Map:
 
 @dataclass(frozen=True)
 class ParsedLine:
+    """A non-empty, non-comment line from the map file.
+
+    Attributes:
+        number: The original 1-based line number in the file.
+        content: The stripped line content.
+    """
+
     number: int
     content: str
 
 
 def parse_file(path: str | Path) -> Map:
+    """Parse a map file and return a Map object.
+
+    Args:
+        path: Path to the map file.
+
+    Returns:
+        The parsed Map.
+
+    Raises:
+        ParseError: If the file content is invalid.
+        OSError: If the file cannot be read.
+    """
     with Path(path).open("r", encoding="utf-8") as file:
         return parse_lines(file.readlines())
 
 
 def parse_lines(raw_lines: list[str]) -> Map:
+    """Parse a list of raw text lines into a Map.
+
+    Args:
+        raw_lines: Lines from the map file.
+
+    Returns:
+        The parsed Map.
+
+    Raises:
+        ParseError: If the content is invalid.
+    """
     lines = _clean_lines(raw_lines)
     if not lines:
         raise ParseError(1, "empty map file")
@@ -133,6 +199,7 @@ def parse_lines(raw_lines: list[str]) -> Map:
 
 
 def _clean_lines(raw_lines: list[str]) -> list[ParsedLine]:
+    """Filter out blank lines and comments, returning ParsedLine objects."""
     lines: list[ParsedLine] = []
     for index, raw_line in enumerate(raw_lines, start=1):
         content = raw_line.strip()
@@ -143,6 +210,7 @@ def _clean_lines(raw_lines: list[str]) -> list[ParsedLine]:
 
 
 def _parse_drone_count(line: ParsedLine) -> int:
+    """Parse the first directive and return the number of drones."""
     parts = line.content.split()
     if len(parts) != 2 or parts[0] != "nb_drones:":
         raise ParseError(
@@ -158,6 +226,17 @@ def _parse_zone(
     ignore_capacity: bool,
     default_capacity: int = 1,
 ) -> Zone:
+    """Parse a zone directive and return a Zone object.
+
+    Args:
+        line: The parsed line to read from.
+        prefix: The directive prefix ('start_hub:', 'end_hub:', or 'hub:').
+        ignore_capacity: If True, ignore max_drones metadata.
+        default_capacity: Default capacity when ignored (used for start/end).
+
+    Returns:
+        The parsed Zone.
+    """
     body = line.content.removeprefix(prefix).strip()
     main_part, metadata = _split_metadata(line, body, ZONE_METADATA_KEYS)
     parts = main_part.split()
@@ -200,6 +279,16 @@ def _parse_connection(
     zones: dict[str, Zone],
     seen_connections: set[frozenset[str]],
 ) -> Connection:
+    """Parse a connection directive and return a Connection object.
+
+    Args:
+        line: The parsed line to read from.
+        zones: Previously defined zones for validation.
+        seen_connections: Set of already-seen connection pairs.
+
+    Returns:
+        The parsed Connection.
+    """
     body = line.content.removeprefix("connection:").strip()
     main_part, metadata = _split_metadata(line, body, CONNECTION_METADATA_KEYS)
     parts = main_part.split()
@@ -255,6 +344,7 @@ def _split_metadata(
     body: str,
     allowed_keys: set[str],
 ) -> tuple[str, dict[str, str]]:
+    """Split a directive body into its main part and metadata dictionary."""
     if "[" not in body and "]" not in body:
         return body.strip(), {}
     if body.count("[") != 1 or body.count("]") != 1:
@@ -280,6 +370,7 @@ def _parse_metadata(
     metadata_content: str,
     allowed_keys: set[str],
 ) -> dict[str, str]:
+    """Parse the content inside a metadata block into a key-value dict."""
     if not metadata_content:
         raise ParseError(line.number, "metadata block cannot be empty")
 
@@ -304,12 +395,14 @@ def _parse_metadata(
 
 
 def _add_zone(line: ParsedLine, zones: dict[str, Zone], zone: Zone) -> None:
+    """Add a zone to the zones dict, raising on duplicate names."""
     if zone.name in zones:
         raise ParseError(line.number, f"duplicate zone name '{zone.name}'")
     zones[zone.name] = zone
 
 
 def _validate_zone_name(line_number: int, name: str) -> None:
+    """Validate that a zone name is non-empty and contains no dash or space."""
     if not name:
         raise ParseError(line_number, "zone name cannot be empty")
     if "-" in name:
@@ -319,6 +412,7 @@ def _validate_zone_name(line_number: int, name: str) -> None:
 
 
 def _parse_int(line_number: int, value: str, field_name: str) -> int:
+    """Parse a string as an integer, raising ParseError on failure."""
     try:
         return int(value)
     except ValueError as error:
@@ -329,6 +423,7 @@ def _parse_int(line_number: int, value: str, field_name: str) -> int:
 
 
 def _parse_positive_int(line_number: int, value: str, field_name: str) -> int:
+    """Parse a string as a positive integer, raising ParseError if <= 0."""
     number = _parse_int(line_number, value, field_name)
     if number <= 0:
         raise ParseError(
@@ -339,4 +434,5 @@ def _parse_positive_int(line_number: int, value: str, field_name: str) -> int:
 
 
 def _is_single_word(value: str) -> bool:
+    """Return True if the value is non-empty and contains no spaces."""
     return bool(value) and not any(character.isspace() for character in value)
