@@ -49,7 +49,8 @@ A graphical interface is also available:
 uv run python arcade_test.py maps/easy/01_linear_path.txt
 ```
 
-Press `SPACE` to advance the simulation one turn at a time, `ESC` to quit.
+Use `A`/`D` to change maps, the arrow keys to move forward or backward one turn,
+`R` to reset, `SPACE` to move forward, and `ESC` to quit.
 
 ## Maps
 

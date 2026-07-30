@@ -11,6 +11,9 @@ run:
 debug:
 	uv run python -m pdb main.py $(MAP)
 
+make visual:
+	uv run python arcade_test.py $(MAP)
+
 test:
 	uv run python -m unittest discover -s tests -v
 

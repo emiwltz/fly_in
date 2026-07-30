@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 import arcade
 from arcade.types import Color
 
 from graph import Graph
 from parser import Map, ParseError, parse_file, Zone
-from pathfinding import Pathfinder
+from pathfinding import PathNotFoundError, Pathfinder
 from drone import Simulation
 
 DRAW_LEFT_RATIO = 0.05
@@ -16,6 +17,7 @@ DRAW_RIGHT_RATIO = 0.95
 DRAW_BOTTOM_RATIO = 0.10
 DRAW_TOP_RATIO = 0.85
 HUB_RADIUS = 25
+DRONE_IMAGES = sorted(str(path) for path in Path("drone_png").glob("*.png"))
 
 
 @dataclass(frozen=True)
@@ -231,35 +233,12 @@ def calculate_draw_area(screen_width: int, screen_height: int) -> DrawArea:
     )
 
 
-def calculate_screen_size(x_max: int, y_max: int) -> dict:
-    """Return a dictionary of screen dimensions and reference points."""
-    y_percent = y_max / 100
-    x_percent = x_max / 100
-
-    top_left = (x_percent * 5, y_max - y_percent * 5)
-    top_right = (x_max - x_percent * 5, y_max - y_percent * 5)
-    bottom_left = (x_percent * 5, y_percent * 30)
-    bottom_right = (x_max - x_percent * 5, y_percent * 30)
-    center = (x_max / 2, y_max / 2)
-
-    return {
-        "x_max": x_max,
-        "y_max": y_max,
-        "x_percent": x_percent,
-        "y_percent": y_percent,
-        "top_left": top_left,
-        "top_right": top_right,
-        "bottom_left": bottom_left,
-        "bottom_right": bottom_right,
-        "center": center,
-    }
-
-
 def build_sprites(drone_nb: int) -> arcade.SpriteList:
     """Create a SpriteList containing one drone sprite per drone."""
     drone_sprites: arcade.SpriteList = arcade.SpriteList()
     while drone_nb > 0:
-        drone = arcade.Sprite("drone.png", 0.03)
+        image_index = len(drone_sprites) % len(DRONE_IMAGES)
+        drone = arcade.Sprite(DRONE_IMAGES[image_index], 0.06)
         drone_sprites.append(drone)
         drone_nb -= 1
     return drone_sprites
@@ -268,7 +247,7 @@ def build_sprites(drone_nb: int) -> arcade.SpriteList:
 class GameView(arcade.View):
     """Arcade view that displays the map and animates the simulation.
 
-    Press SPACE to advance one turn, ESC to quit.
+    Use the keyboard to control turns and change maps.
 
     Attributes:
         drone_map: The parsed map, or None.
@@ -280,13 +259,19 @@ class GameView(arcade.View):
     """
 
     def __init__(
-        self, drone_map: Map | None = None, sim: Simulation | None = None
+        self,
+        drone_map: Map | None = None,
+        sim: Simulation | None = None,
+        map_files: list[str] | None = None,
+        map_index: int = -1,
     ) -> None:
         """Initialize the game view.
 
         Args:
             drone_map: The parsed map to display, or None.
             sim: The simulation to animate, or None.
+            map_files: Map files available from the menu.
+            map_index: Index of the currently loaded map.
         """
         super().__init__()
         self.drone_map = drone_map
@@ -294,6 +279,8 @@ class GameView(arcade.View):
         self.hubs_by_name: dict[str, DrawableHub] = {}
         self.turn = 0
         self.sim = sim
+        self.map_files = map_files or []
+        self.map_index = map_index
         self.drones_sprites = (
             build_sprites(len(sim.drones))
             if sim is not None
@@ -353,14 +340,27 @@ class GameView(arcade.View):
             if self.sim is not None:
                 self.draw_drones(self.sim)
 
-        screen = calculate_screen_size(self.window.width, self.window.height)
         arcade.draw_text(
-            f"screen: {screen['x_max']} x {screen['y_max']}",
+            f"Map: {self.current_map_name()}",
             20,
             self.window.height - 40,
             arcade.color.BLACK,
             font_size=18,
         )
+        arcade.draw_text(
+            "A/D: maps | LEFT/RIGHT or SPACE: turns | R: reset | ESC: quit",
+            center_x,
+            30,
+            arcade.color.BLACK,
+            font_size=14,
+            anchor_x="center",
+        )
+
+    def current_map_name(self) -> str:
+        """Return the current map file name, or a default label."""
+        if self.map_index < 0 or self.map_index >= len(self.map_files):
+            return "none"
+        return Path(self.map_files[self.map_index]).name
 
     def draw_connections(
         self,
@@ -411,12 +411,72 @@ class GameView(arcade.View):
             sprite.center_y = hub.y
         self.drones_sprites.draw()
 
+    def next_turn(self) -> None:
+        """Advance the simulation by one turn."""
+        if self.sim is not None and not self.sim.is_finished():
+            self.sim.make_turn()
+            self.turn = self.sim.turn
+
+    def reset_simulation(self) -> None:
+        """Restart the current map at turn zero."""
+        if self.drone_map is None:
+            return
+        graph = Graph(self.drone_map)
+        pathfinder = Pathfinder(graph)
+        self.sim = Simulation(self.drone_map, graph, pathfinder)
+        self.turn = 0
+        self.drones_sprites = build_sprites(len(self.sim.drones))
+
+    def previous_turn(self) -> None:
+        """Return to the preceding turn by replaying the simulation."""
+        if self.sim is None or self.turn == 0:
+            return
+        target_turn = self.turn - 1
+        self.reset_simulation()
+        if self.sim is None:
+            return
+        while self.sim.turn < target_turn:
+            self.sim.make_turn()
+        self.turn = self.sim.turn
+
+    def change_map(self, direction: int) -> None:
+        """Load the previous or next map from the map list."""
+        if not self.map_files:
+            return
+        if self.map_index == -1:
+            new_index = 0 if direction > 0 else len(self.map_files) - 1
+        else:
+            new_index = (self.map_index + direction) % len(self.map_files)
+        map_file = self.map_files[new_index]
+
+        try:
+            drone_map = parse_file(map_file)
+            graph = Graph(drone_map)
+            pathfinder = Pathfinder(graph)
+            simulation = Simulation(drone_map, graph, pathfinder)
+        except (OSError, ParseError, PathNotFoundError) as error:
+            print(f"Map error: {error}", file=sys.stderr)
+            return
+
+        self.drone_map = drone_map
+        self.sim = simulation
+        self.map_index = new_index
+        self.turn = 0
+        self.drones_sprites = build_sprites(len(simulation.drones))
+        self.update_drawable_map()
+
     def on_key_press(self, symbol: int, modifiers: int) -> None:
-        """Handle keyboard input: SPACE advances, ESC quits."""
-        if symbol == arcade.key.SPACE:
-            if self.sim is not None and not self.sim.is_finished():
-                self.sim.make_turn()
-                self.turn = self.sim.turn
+        """Handle keyboard controls for turns, maps, reset, and quit."""
+        if symbol in (arcade.key.SPACE, arcade.key.RIGHT):
+            self.next_turn()
+        elif symbol == arcade.key.LEFT:
+            self.previous_turn()
+        elif symbol == arcade.key.A:
+            self.change_map(-1)
+        elif symbol == arcade.key.D:
+            self.change_map(1)
+        elif symbol == arcade.key.R:
+            self.reset_simulation()
         elif symbol == arcade.key.ESCAPE:
             arcade.exit()
 
@@ -451,16 +511,23 @@ def load_map_from_args() -> Map | None:
 def main() -> None:
     """Open the Arcade window and start the visualization."""
     drone_map = load_map_from_args()
+    map_files = sorted(str(path) for path in Path("maps").rglob("*.txt"))
+    map_index = -1
+    if len(sys.argv) == 2:
+        current_map = str(Path(sys.argv[1]))
+        if current_map not in map_files:
+            map_files.append(current_map)
+        map_index = map_files.index(current_map)
     window = arcade.Window(title="test")
     window.set_fullscreen()
 
     if drone_map is None:
-        game = GameView(None)
+        game = GameView(None, map_files=map_files)
     else:
         graph = Graph(drone_map)
         pathfinder = Pathfinder(graph)
         sim = Simulation(drone_map, graph, pathfinder)
-        game = GameView(drone_map, sim)
+        game = GameView(drone_map, sim, map_files, map_index)
 
     window.show_view(game)
     arcade.run()
