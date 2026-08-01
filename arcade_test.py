@@ -19,6 +19,25 @@ DRAW_TOP_RATIO = 0.85
 HUB_RADIUS = 25
 DRONE_IMAGES = sorted(str(path) for path in Path("drone_png").glob("*.png"))
 
+COLORS = {
+    "red": arcade.color.RED,
+    "green": arcade.color.GREEN,
+    "blue": arcade.color.BLUE,
+    "yellow": arcade.color.YELLOW,
+    "orange": arcade.color.ORANGE,
+    "purple": arcade.color.PURPLE,
+    "cyan": arcade.color.CYAN,
+    "magenta": arcade.color.MAGENTA,
+    "black": arcade.color.BLACK,
+    "brown": arcade.color.BROWN,
+    "gold": arcade.color.GOLD,
+    "maroon": arcade.color.MAROON,
+    "crimson": arcade.color.CRIMSON,
+    "violet": arcade.color.VIOLET,
+    "lime": arcade.color.LIME,
+    "darkred": arcade.color.DARK_RED,
+}
+
 
 @dataclass(frozen=True)
 class MapBounds:
@@ -487,7 +506,7 @@ def get_hub_color(hub: DrawableHub) -> Color:
         return arcade.color.GREEN
     if hub.kind == "end":
         return arcade.color.RED
-    return arcade.color.BLUE
+    return COLORS[hub.color] if hub.color in COLORS else arcade.color.GRAY
 
 
 def load_map_from_args() -> Map | None:
