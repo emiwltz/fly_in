@@ -17,7 +17,30 @@ DRAW_RIGHT_RATIO = 0.95
 DRAW_BOTTOM_RATIO = 0.10
 DRAW_TOP_RATIO = 0.85
 HUB_RADIUS = 25
+DRONE_OFFSET_RADIUS = 14
 DRONE_IMAGES = sorted(str(path) for path in Path("drone_png").glob("*.png"))
+
+DRONE_OFFSETS: dict[int, list[tuple[float, float]]] = {
+    1: [(0.0, 0.0)],
+    2: [(-1.0, 0.0), (1.0, 0.0)],
+    3: [(0.0, 1.0), (-0.87, -0.5), (0.87, -0.5)],
+    4: [(1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0)],
+    5: [
+        (0.0, 1.0),
+        (0.95, 0.31),
+        (0.59, -0.81),
+        (-0.59, -0.81),
+        (-0.95, 0.31),
+    ],
+    6: [
+        (1.0, 0.0),
+        (0.5, 0.87),
+        (-0.5, 0.87),
+        (-1.0, 0.0),
+        (-0.5, -0.87),
+        (0.5, -0.87),
+    ],
+}
 
 COLORS = {
     "red": arcade.color.RED,
@@ -422,17 +445,36 @@ class GameView(arcade.View):
             # )
 
     def draw_drones(self, sim: Simulation) -> None:
-        """Position and draw all drone sprites on their current zones."""
+        """Position and draw all drone sprites on their current zones.
+
+        Drones sharing the same hub or connection are spread horizontally
+        so they remain visible.
+        """
+        positions: dict[str, list[tuple[float, float, int]]] = {}
         for drone in sim.drones:
             hub = self.hubs_by_name[drone.current_zone_name()]
-            sprite = self.drones_sprites[drone.identifier - 1]
             if drone.transit_destination is None:
-                sprite.center_x = hub.x
-                sprite.center_y = hub.y
+                base_x, base_y = hub.x, hub.y
             else:
                 destination = self.hubs_by_name[drone.transit_destination]
-                sprite.center_x = (hub.x + destination.x) / 2
-                sprite.center_y = (hub.y + destination.y) / 2
+                base_x = (hub.x + destination.x) / 2
+                base_y = (hub.y + destination.y) / 2
+            key = f"{base_x:.1f},{base_y:.1f}"
+            positions.setdefault(key, []).append(
+                (base_x, base_y, drone.identifier - 1),
+            )
+
+        for group in positions.values():
+            group.sort(key=lambda entry: entry[2])
+            count = len(group)
+            offsets = DRONE_OFFSETS.get(count)
+            if offsets is None:
+                offsets = DRONE_OFFSETS[max(DRONE_OFFSETS)]
+            for entry, (dx, dy) in zip(group, offsets):
+                base_x, base_y, sprite_index = entry
+                sprite = self.drones_sprites[sprite_index]
+                sprite.center_x = base_x + dx * DRONE_OFFSET_RADIUS
+                sprite.center_y = base_y + dy * DRONE_OFFSET_RADIUS
         self.drones_sprites.draw()
 
     def next_turn(self) -> None:
