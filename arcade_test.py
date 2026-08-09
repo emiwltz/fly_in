@@ -426,8 +426,13 @@ class GameView(arcade.View):
         for drone in sim.drones:
             hub = self.hubs_by_name[drone.current_zone_name()]
             sprite = self.drones_sprites[drone.identifier - 1]
-            sprite.center_x = hub.x
-            sprite.center_y = hub.y
+            if drone.transit_destination is None:
+                sprite.center_x = hub.x
+                sprite.center_y = hub.y
+            else:
+                destination = self.hubs_by_name[drone.transit_destination]
+                sprite.center_x = (hub.x + destination.x) / 2
+                sprite.center_y = (hub.y + destination.y) / 2
         self.drones_sprites.draw()
 
     def next_turn(self) -> None:

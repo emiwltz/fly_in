@@ -1,6 +1,6 @@
 import sys
 
-from drone import Simulation
+from drone import Simulation, SimulationDeadlockError
 from graph import Graph
 from parser import ParseError, parse_file
 from pathfinding import PathNotFoundError, Pathfinder
@@ -24,6 +24,9 @@ def main() -> int:
     except ParseError as error:
         print(f"Parsing error: {error}", file=sys.stderr)
         return 1
+    except UnicodeError as error:
+        print(f"File encoding error: {error}", file=sys.stderr)
+        return 1
     except OSError as error:
         print(f"File error: {error}", file=sys.stderr)
         return 1
@@ -33,11 +36,13 @@ def main() -> int:
 
     try:
         simulation = Simulation(drone_map, graph, pathfinder)
+        turns = simulation.run()
     except PathNotFoundError as error:
         print(f"Pathfinding error: {error}", file=sys.stderr)
         return 1
-
-    turns = simulation.run()
+    except SimulationDeadlockError as error:
+        print(f"Simulation error: {error}", file=sys.stderr)
+        return 1
 
     for moves in turns:
         print(" ".join(moves))

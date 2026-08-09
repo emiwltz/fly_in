@@ -116,7 +116,6 @@ class Pathfinder:
 
         return self._build_all_paths(previous, start, end)
 
-
     def _build_all_paths(
         self,
         previous: dict[str, list[str]],

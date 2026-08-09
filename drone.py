@@ -16,7 +16,7 @@ class Drone:
         identifier: Unique drone ID (starts at 1).
         path: The list of zone names this drone must follow.
         path_index: Current position in the path.
-        waiting: True if the drone is waiting in a restricted zone.
+        transit_destination: Destination while the drone is on a connection.
     """
 
     def __init__(self, identifier: int, path: list[str]) -> None:
@@ -29,10 +29,10 @@ class Drone:
         self.identifier = identifier
         self.path = path
         self.path_index = 0
-        self.waiting = False
+        self.transit_destination: str | None = None
 
     def current_zone_name(self) -> str:
-        """Return the name of the zone the drone currently occupies."""
+        """Return the name of the last zone reached by the drone."""
         return self.path[self.path_index]
 
     def next_zone_name(self) -> str | None:
@@ -43,15 +43,18 @@ class Drone:
 
     def is_arrived(self) -> bool:
         """Return True if the drone has reached the end of its path."""
-        return self.path_index >= len(self.path) - 1
+        return (
+            self.path_index >= len(self.path) - 1
+            and self.transit_destination is None
+        )
 
     def remaining_steps(self) -> int:
         """Return the number of zones left to traverse."""
         return len(self.path) - self.path_index
 
     def can_move(self) -> bool:
-        """Return True if the drone is not waiting in a restricted zone."""
-        return not self.waiting
+        """Return True if the drone is not currently in transit."""
+        return self.transit_destination is None
 
 
 class Simulation:
@@ -59,7 +62,7 @@ class Simulation:
 
     Drones are distributed across all shortest paths in round-robin order.
     Each turn, drones move simultaneously while respecting zone and
-    connection capacities. Restricted zones require a one-turn wait.
+    connection capacities. Movements into restricted zones take two turns.
 
     Attributes:
         drone_map: The parsed map.
@@ -68,6 +71,7 @@ class Simulation:
         paths: All shortest paths available for distribution.
         drones: List of Drone objects.
         occupation: Current drone count per zone.
+        reservations: Reserved places for drones currently in transit.
     """
 
     def __init__(
@@ -106,6 +110,9 @@ class Simulation:
             name: 0 for name in drone_map.zones
         }
         self.occupation[drone_map.start_name] = drone_map.drone_nb
+        self.reservations: dict[str, int] = {
+            name: 0 for name in drone_map.zones
+        }
 
     def _find_edge(self, from_zone: str, to_zone: str) -> Edge:
         """Find the edge between two adjacent zones.
@@ -130,7 +137,7 @@ class Simulation:
 
         Drones closest to the end are processed first. Each drone may
         move to the next zone on its path if capacity allows. Drones
-        waiting in restricted zones are released.
+        in transit to restricted zones complete their movement.
 
         Returns:
             A list of movement strings in the format 'D<ID>-<zone>'.
@@ -138,7 +145,19 @@ class Simulation:
         self.turn += 1
         moves: list[str] = []
         next_occupation = dict(self.occupation)
+        next_reservations = dict(self.reservations)
         edge_usage: dict[frozenset[str], int] = {}
+
+        for drone in self.drones:
+            if drone.transit_destination is None:
+                continue
+            edge_key = frozenset(
+                {
+                    drone.current_zone_name(),
+                    drone.transit_destination,
+                }
+            )
+            edge_usage[edge_key] = edge_usage.get(edge_key, 0) + 1
 
         ordered = sorted(
             self.drones,
@@ -149,11 +168,13 @@ class Simulation:
             if drone.is_arrived():
                 continue
 
-            if drone.waiting:
-                drone.waiting = False
-                moves.append(
-                    f"D{drone.identifier}-{drone.current_zone_name()}"
-                )
+            if drone.transit_destination is not None:
+                destination = drone.transit_destination
+                next_reservations[destination] -= 1
+                next_occupation[destination] += 1
+                drone.path_index += 1
+                drone.transit_destination = None
+                moves.append(f"D{drone.identifier}-{destination}")
                 continue
 
             current_name = drone.current_zone_name()
@@ -169,24 +190,30 @@ class Simulation:
             if used >= edge.max_capacity:
                 continue
 
-            if next_occupation[next_name] >= next_zone.max_drones:
+            if (
+                next_occupation[next_name]
+                + next_reservations[next_name]
+                >= next_zone.max_drones
+            ):
                 continue
 
             edge_usage[edge_key] = used + 1
 
             next_occupation[current_name] -= 1
-            next_occupation[next_name] += 1
-            drone.path_index += 1
 
             if next_zone.zone_type == "restricted":
-                drone.waiting = True
+                next_reservations[next_name] += 1
+                drone.transit_destination = next_name
                 moves.append(
                     f"D{drone.identifier}-{current_name}-{next_name}"
                 )
             else:
+                next_occupation[next_name] += 1
+                drone.path_index += 1
                 moves.append(f"D{drone.identifier}-{next_name}")
 
         self.occupation = next_occupation
+        self.reservations = next_reservations
         return moves
 
     def is_finished(self) -> bool:
@@ -203,17 +230,26 @@ class Simulation:
             SimulationDeadlockError: If the simulation cannot progress.
         """
         turns: list[list[str]] = []
-        max_path_len = max(len(path) for path in self.paths)
-        max_turns = max_path_len * len(self.drones) + 1
+        max_path_cost = max(
+            sum(
+                self.graph.movement_cost(zone_name)
+                for zone_name in path[1:]
+            )
+            for path in self.paths
+        )
+        max_turns = max_path_cost * len(self.drones) + 1
 
         while not self.is_finished():
-            any_waiting = any(d.waiting for d in self.drones)
+            any_in_transit = any(
+                drone.transit_destination is not None
+                for drone in self.drones
+            )
             moves = self.make_turn()
 
             if (
                 not moves
                 and not self.is_finished()
-                and not any_waiting
+                and not any_in_transit
             ):
                 raise SimulationDeadlockError(
                     f"simulation blocked at turn {self.turn}",
@@ -221,7 +257,7 @@ class Simulation:
 
             turns.append(moves)
 
-            if len(turns) >= max_turns:
+            if len(turns) >= max_turns and not self.is_finished():
                 raise SimulationDeadlockError(
                     f"simulation exceeded {max_turns} turns",
                 )

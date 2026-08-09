@@ -1,21 +1,27 @@
+*This project has been created as part of the 42 curriculum by emiwltz.*
+
 # Fly-In
+
+## Description
 
 A drone routing simulation system that navigates multiple drones through
 connected zones while minimizing simulation turns and handling movement
 constraints.
 
-## Requirements
+## Instructions
+
+### Requirements
 
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) package manager
 
-## Installation
+### Installation
 
 ```bash
 make install
 ```
 
-## Usage
+### Usage
 
 Run the simulation on a map file:
 
@@ -29,9 +35,22 @@ Or directly:
 uv run python main.py maps/easy/01_linear_path.txt
 ```
 
-The program outputs the step-by-step drone movements, one line per turn:
+### Example input
 
+```text
+nb_drones: 2
+start_hub: start 0 0 [color=green]
+hub: waypoint1 1 0 [color=blue]
+hub: waypoint2 2 0 [color=blue]
+end_hub: goal 3 0 [color=red]
+connection: start-waypoint1
+connection: waypoint1-waypoint2
+connection: waypoint2-goal
 ```
+
+### Expected output
+
+```text
 D1-waypoint1
 D1-waypoint2 D2-waypoint1
 D1-goal D2-waypoint2
@@ -51,6 +70,8 @@ uv run python arcade_test.py maps/easy/01_linear_path.txt
 
 Use `A`/`D` to change maps, the arrow keys to move forward or backward one turn,
 `R` to reset, `SPACE` to move forward, and `ESC` to quit.
+The view shows the network topology, configured colors, drone positions, and
+drones currently in transit between two zones.
 
 ## Maps
 
@@ -82,7 +103,7 @@ connection: roof1-goal [max_link_capacity=2]
 | Type | Movement cost | Description |
 |---|---|---|
 | `normal` | 1 turn | Standard zone (default) |
-| `restricted` | 2 turns | Drone enters, waits one turn, then continues |
+| `restricted` | 2 turns | Drone transits for one turn, then arrives |
 | `priority` | 1 turn | Preferred zone in pathfinding at equal cost |
 | `blocked` | N/A | Inaccessible, drones must not enter |
 
@@ -109,29 +130,22 @@ The start and end zones have unlimited capacity.
 ### Algorithm
 
 - **Pathfinding**: Dijkstra with a secondary penalty that prefers `priority`
-  zones at equal cost. All shortest paths are found for multi-path distribution.
-- **Simulation**: Turn-based with simultaneous movement, zone and connection
-  capacity checks, restricted zone transit over two turns, and deadlock
-  detection.
-- **Distribution**: Drones are split across all shortest paths in round-robin
-  order to maximize throughput.
-
-## Testing
-
-```bash
-make test
-```
-
-Tests cover graph construction, pathfinding, simulation mechanics, restricted
-zones, connection capacities, multi-path distribution, and output format.
+  zones at equal cost. Paths with both minimum cost and the best priority
+  penalty are reconstructed for multi-path distribution.
+- **Distribution**: Drones are split across the selected paths in round-robin
+  order.
+- **Simulation**: Each turn processes drones nearest to the destination first
+  so zones can be freed and reused during the same turn. Zone occupancy,
+  destination reservations, and bidirectional connection capacities are tracked
+  separately. A drone entering a `restricted` zone occupies the connection for
+  two simulation turns and must arrive on the second turn.
+- **Complexity**: Dijkstra runs in `O((V + E) log V)`. Reconstructing every
+  equivalent shortest path can be exponential in graphs containing many
+  equivalent branches.
 
 ## Benchmarks
 
-```bash
-make benchmark
-```
-
-Current results (all within targets):
+Current results on the provided maps (all within targets):
 
 | Map | Turns | Target | Status |
 |---|---:|---:|---|
@@ -152,7 +166,8 @@ Current results (all within targets):
 make lint
 ```
 
-Runs flake8 and mypy with strict type checking.
+Runs flake8 and mypy with the checks required by the subject.
+
 
 ## License
 
