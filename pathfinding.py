@@ -29,88 +29,6 @@ class Pathfinder:
             return 0
         return 1
 
-    def shortest_path(self, start: str, end: str) -> list[str]:
-        """Find the single shortest path from start to end.
-
-        At equal cost, the path with the fewest non-priority zones is chosen.
-
-        Args:
-            start: Name of the start zone.
-            end: Name of the end zone.
-
-        Returns:
-            A list of zone names forming the shortest path.
-
-        Raises:
-            PathNotFoundError: If no path exists.
-        """
-        distances = {
-            name: float("inf")
-            for name in self.graph.zones
-        }
-        penalties = {
-            name: float("inf")
-            for name in self.graph.zones
-        }
-
-        previous: dict[str, str | None] = {
-            name: None
-            for name in self.graph.zones
-        }
-
-        distances[start] = 0
-        penalties[start] = 0
-        queue = [(0, 0, start)]
-
-        while queue:
-            current_cost, current_penalty, current_zone = (
-                heapq.heappop(queue)
-            )
-
-            if current_zone == end:
-                break
-
-            if current_cost > distances[current_zone]:
-                continue
-            if (
-                current_cost == distances[current_zone]
-                and current_penalty > penalties[current_zone]
-            ):
-                continue
-
-            for edge in self.graph.neighbors(current_zone):
-                destination = edge.destination
-                zone = self.graph.get_zone(destination)
-
-                if zone.zone_type == "blocked":
-                    continue
-
-                new_cost = (
-                    current_cost
-                    + self.graph.movement_cost(destination)
-                )
-                new_penalty = (
-                    current_penalty
-                    + self._zone_penalty(destination)
-                )
-
-                better_cost = new_cost < distances[destination]
-                equal_cost_better_penalty = (
-                    new_cost == distances[destination]
-                    and new_penalty < penalties[destination]
-                )
-
-                if better_cost or equal_cost_better_penalty:
-                    distances[destination] = new_cost
-                    penalties[destination] = new_penalty
-                    previous[destination] = current_zone
-                    heapq.heappush(
-                        queue,
-                        (new_cost, new_penalty, destination),
-                    )
-
-        return self._build_path(previous, start, end)
-
     def find_shortest_paths(self, start: str, end: str) -> list[list[str]]:
         """Find all shortest paths from start to end.
 
@@ -198,41 +116,6 @@ class Pathfinder:
 
         return self._build_all_paths(previous, start, end)
 
-    def _build_path(
-        self,
-        previous: dict[str, str | None],
-        start: str,
-        end: str,
-    ) -> list[str]:
-        """Reconstruct a single path from the predecessor dictionary.
-
-        Args:
-            previous: Maps each zone to its predecessor in the shortest path.
-            start: Name of the start zone.
-            end: Name of the end zone.
-
-        Returns:
-            The reconstructed path as a list of zone names.
-
-        Raises:
-            PathNotFoundError: If the path cannot reach the start zone.
-        """
-        path = []
-        current: str | None = end
-
-        while current is not None:
-            path.append(current)
-
-            if current == start:
-                break
-
-            current = previous[current]
-
-        if path[-1] != start:
-            raise PathNotFoundError("no available path")
-
-        path.reverse()
-        return path
 
     def _build_all_paths(
         self,
