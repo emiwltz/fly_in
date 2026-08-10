@@ -32,7 +32,7 @@ make run MAP=maps/easy/01_linear_path.txt
 Or directly:
 
 ```bash
-uv run python main.py maps/easy/01_linear_path.txt
+uv run python src/main.py maps/easy/01_linear_path.txt
 ```
 
 ### Example input
@@ -65,7 +65,7 @@ for drones in transit toward restricted zones).
 A graphical interface is also available:
 
 ```bash
-uv run python arcade_test.py maps/easy/01_linear_path.txt
+uv run python src/arcade_test.py maps/easy/01_linear_path.txt
 ```
 
 Use `A`/`D` to change maps, the arrow keys to move forward or backward one turn,
@@ -120,12 +120,12 @@ The start and end zones have unlimited capacity.
 
 | File | Responsibility |
 |---|---|
-| `parser.py` | Parses and validates map files |
-| `graph.py` | Builds adjacency list from parsed map |
-| `pathfinding.py` | Dijkstra with priority penalty for pathfinding |
-| `drone.py` | Drone state and simulation engine |
-| `main.py` | CLI entry point |
-| `arcade_test.py` | Graphical visualization with Arcade |
+| `src/parser.py` | Parses and validates map files |
+| `src/graph.py` | Builds adjacency list from parsed map |
+| `src/pathfinding.py` | Dijkstra with priority penalty for pathfinding |
+| `src/drone.py` | Drone state and simulation engine |
+| `src/main.py` | CLI entry point |
+| `src/arcade_test.py` | Graphical visualization with Arcade |
 
 ### Algorithm
 

@@ -17,28 +17,27 @@ DRAW_RIGHT_RATIO = 0.95
 DRAW_BOTTOM_RATIO = 0.10
 DRAW_TOP_RATIO = 0.85
 HUB_RADIUS = 25
-DRONE_OFFSET_RADIUS = 14
 DRONE_IMAGES = sorted(str(path) for path in Path("drone_png").glob("*.png"))
 
-DRONE_OFFSETS: dict[int, list[tuple[float, float]]] = {
-    1: [(0.0, 0.0)],
-    2: [(-1.0, 0.0), (1.0, 0.0)],
-    3: [(0.0, 1.0), (-0.87, -0.5), (0.87, -0.5)],
-    4: [(1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0)],
+DRONE_OFFSETS: dict[int, list[tuple[int, int]]] = {
+    1: [(0, 0)],
+    2: [(-14, 0), (14, 0)],
+    3: [(0, 14), (-12, -7), (12, -7)],
+    4: [(14, 0), (0, 14), (-14, 0), (0, -14)],
     5: [
-        (0.0, 1.0),
-        (0.95, 0.31),
-        (0.59, -0.81),
-        (-0.59, -0.81),
-        (-0.95, 0.31),
+        (0, 14),
+        (13, 4),
+        (8, -11),
+        (-8, -11),
+        (-13, 4),
     ],
     6: [
-        (1.0, 0.0),
-        (0.5, 0.87),
-        (-0.5, 0.87),
-        (-1.0, 0.0),
-        (-0.5, -0.87),
-        (0.5, -0.87),
+        (14, 0),
+        (7, 12),
+        (-7, 12),
+        (-14, 0),
+        (-7, -12),
+        (7, -12),
     ],
 }
 
@@ -435,14 +434,6 @@ class GameView(arcade.View):
                 arcade.color.BLACK,
                 2,
             )
-            # arcade.draw_text(
-            #     hub.name,
-            #     hub.x,
-            #     hub.y + HUB_RADIUS + 8,
-            #     arcade.color.BLACK,
-            #     font_size=14,
-            #     anchor_x="center",
-            # )
 
     def draw_drones(self, sim: Simulation) -> None:
         """Position and draw all drone sprites on their current zones.
@@ -473,8 +464,8 @@ class GameView(arcade.View):
             for entry, (dx, dy) in zip(group, offsets):
                 base_x, base_y, sprite_index = entry
                 sprite = self.drones_sprites[sprite_index]
-                sprite.center_x = base_x + dx * DRONE_OFFSET_RADIUS
-                sprite.center_y = base_y + dy * DRONE_OFFSET_RADIUS
+                sprite.center_x = base_x + dx
+                sprite.center_y = base_y + dy
         self.drones_sprites.draw()
 
     def next_turn(self) -> None:

@@ -21,6 +21,7 @@ pythonVersion = "3.13"
 
 [tool.mypy]
 python_version = "3.13"
+mypy_path = "src"
 exclude = [
     "^\\.venv/",
     "^__pycache__/",
