@@ -344,6 +344,11 @@ def _split_metadata(
             line.number,
             "metadata block must use one matching '[' and ']' pair",
         )
+    if body.index("[") > body.index("]"):
+        raise ParseError(
+            line.number,
+            "metadata block must open with '[' before ']'",
+        )
 
     before, after_open = body.split("[", 1)
     metadata_content, after = after_open.split("]", 1)

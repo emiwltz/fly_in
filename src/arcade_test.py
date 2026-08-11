@@ -511,7 +511,12 @@ class GameView(arcade.View):
             graph = Graph(drone_map)
             pathfinder = Pathfinder(graph)
             simulation = Simulation(drone_map, graph, pathfinder)
-        except (OSError, ParseError, PathNotFoundError) as error:
+        except (
+            OSError,
+            UnicodeError,
+            ParseError,
+            PathNotFoundError,
+        ) as error:
             print(f"Map error: {error}", file=sys.stderr)
             return
 
@@ -560,13 +565,16 @@ def load_map_from_args() -> Map | None:
     except ParseError as error:
         print(f"Parsing error: {error}", file=sys.stderr)
         raise SystemExit(1) from error
+    except UnicodeError as error:
+        print(f"File encoding error: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
     except OSError as error:
         print(f"File error: {error}", file=sys.stderr)
         raise SystemExit(1) from error
 
 
-def main() -> None:
-    """Open the Arcade window and start the visualization."""
+def main() -> int:
+    """Open the Arcade window and return an exit status."""
     drone_map = load_map_from_args()
     map_files = sorted(str(path) for path in Path("maps").rglob("*.txt"))
     map_index = -1
@@ -575,20 +583,29 @@ def main() -> None:
         if current_map not in map_files:
             map_files.append(current_map)
         map_index = map_files.index(current_map)
+
+    sim: Simulation | None = None
+    if drone_map is not None:
+        graph = Graph(drone_map)
+        pathfinder = Pathfinder(graph)
+        try:
+            sim = Simulation(drone_map, graph, pathfinder)
+        except PathNotFoundError as error:
+            print(f"Pathfinding error: {error}", file=sys.stderr)
+            return 1
+
     window = arcade.Window(title="test")
     window.set_fullscreen()
 
     if drone_map is None:
         game = GameView(None, map_files=map_files)
     else:
-        graph = Graph(drone_map)
-        pathfinder = Pathfinder(graph)
-        sim = Simulation(drone_map, graph, pathfinder)
         game = GameView(drone_map, sim, map_files, map_index)
 
     window.show_view(game)
     arcade.run()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
