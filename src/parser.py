@@ -197,7 +197,7 @@ def _clean_lines(raw_lines: list[str]) -> list[ParsedLine]:
         content = raw_line.strip()
         if not content or content.startswith("#"):
             continue
-        lines.append(ParsedLine(index, content))
+        lines.append(ParsedLine(index, content.split("#")[0]))
     return lines
 
 

@@ -323,9 +323,7 @@ class GameView(arcade.View):
         self.map_files = map_files or []
         self.map_index = map_index
         self.drones_sprites = (
-            build_sprites(len(sim.drones))
-            if sim is not None
-            else arcade.SpriteList()
+            build_sprites(len(sim.drones)) if sim is not None else arcade.SpriteList()
         )
 
     def on_show_view(self) -> None:
@@ -348,9 +346,7 @@ class GameView(arcade.View):
             self.window.width,
             self.window.height,
         )
-        self.hubs_by_name = {
-            hub.name: hub for hub in self.drawable_map.hubs
-        }
+        self.hubs_by_name = {hub.name: hub for hub in self.drawable_map.hubs}
 
     def on_draw(self) -> None:
         """Render the current frame: title, map, and drones."""
@@ -458,9 +454,7 @@ class GameView(arcade.View):
         for group in positions.values():
             group.sort(key=lambda entry: entry[2])
             count = len(group)
-            offsets = DRONE_OFFSETS.get(count)
-            if offsets is None:
-                offsets = DRONE_OFFSETS[max(DRONE_OFFSETS)]
+            offsets = [(0, i * 4) for i in range(count)]
             for entry, (dx, dy) in zip(group, offsets):
                 base_x, base_y, sprite_index = entry
                 sprite = self.drones_sprites[sprite_index]
@@ -583,7 +577,6 @@ def main() -> int:
         if current_map not in map_files:
             map_files.append(current_map)
         map_index = map_files.index(current_map)
-
     sim: Simulation | None = None
     if drone_map is not None:
         graph = Graph(drone_map)
