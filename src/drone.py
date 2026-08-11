@@ -60,7 +60,7 @@ class Drone:
 class Simulation:
     """Turn-based simulation of multiple drones on a graph.
 
-    Drones are distributed across all shortest paths in round-robin order.
+    Drones are assigned to paths according to their estimated arrival time.
     Each turn, drones move simultaneously while respecting zone and
     connection capacities. Movements into restricted zones take two turns.
 
@@ -68,7 +68,7 @@ class Simulation:
         drone_map: The parsed map.
         graph: The graph built from the map.
         turn: Current turn number (starts at 0).
-        paths: All shortest paths available for distribution.
+        paths: Path assigned to each drone.
         drones: List of Drone objects.
         occupation: Current drone count per zone.
         reservations: Reserved places for drones currently in transit.
@@ -93,16 +93,17 @@ class Simulation:
         self.drone_map = drone_map
         self.graph = graph
         self.turn = 0
-        self.paths = pathfinder.find_shortest_paths(
+        self.paths = pathfinder.find_paths_for_drones(
             drone_map.start_name,
             drone_map.end_name,
+            drone_map.drone_nb,
         )
         if not self.paths:
             raise PathNotFoundError("no path from start to end")
         self.drones = [
             Drone(
                 identifier + 1,
-                self.paths[identifier % len(self.paths)],
+                self.paths[identifier],
             )
             for identifier in range(drone_map.drone_nb)
         ]

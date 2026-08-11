@@ -130,20 +130,12 @@ def parse_lines(raw_lines: list[str]) -> Map:
     seen_connections: set[frozenset[str]] = set()
     start_name: str | None = None
     end_name: str | None = None
-    parsing_connections = False
 
     for line in lines[1:]:
         if line.content.startswith("connection:"):
-            parsing_connections = True
             connection = _parse_connection(line, zones, seen_connections)
             connections.append(connection)
             continue
-
-        if parsing_connections:
-            raise ParseError(
-                line.number,
-                "zone declared after connections started",
-            )
 
         if line.content.startswith("start_hub:"):
             if start_name is not None:

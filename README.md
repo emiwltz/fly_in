@@ -122,26 +122,27 @@ The start and end zones have unlimited capacity.
 |---|---|
 | `src/parser.py` | Parses and validates map files |
 | `src/graph.py` | Builds adjacency list from parsed map |
-| `src/pathfinding.py` | Dijkstra with priority penalty for pathfinding |
+| `src/pathfinding.py` | Capacity-aware Dijkstra path assignment |
 | `src/drone.py` | Drone state and simulation engine |
 | `src/main.py` | CLI entry point |
 | `src/arcade_test.py` | Graphical visualization with Arcade |
 
 ### Algorithm
 
-- **Pathfinding**: Dijkstra with a secondary penalty that prefers `priority`
-  zones at equal cost. Paths with both minimum cost and the best priority
-  penalty are reconstructed for multi-path distribution.
-- **Distribution**: Drones are split across the selected paths in round-robin
-  order.
+- **Pathfinding**: Dijkstra assigns each drone to the path with the earliest
+  estimated arrival. Link and zone time slots account for capacities and
+  restricted-zone duration. At equal arrival time and cost, `priority` zones
+  are preferred.
+- **Distribution**: Each selected path reserves its link and zone slots before
+  the next drone is assigned.
 - **Simulation**: Each turn processes drones nearest to the destination first
   so zones can be freed and reused during the same turn. Zone occupancy,
   destination reservations, and bidirectional connection capacities are tracked
   separately. A drone entering a `restricted` zone occupies the connection for
   two simulation turns and must arrive on the second turn.
-- **Complexity**: Dijkstra runs in `O((V + E) log V)`. Reconstructing every
-  equivalent shortest path can be exponential in graphs containing many
-  equivalent branches.
+- **Complexity**: Dijkstra runs once per drone in
+  `O(D * (V + E) log V)`. Paths are reconstructed iteratively without
+  enumerating every equivalent route.
 
 ## Benchmarks
 
@@ -154,7 +155,7 @@ Current results on the provided maps (all within targets):
 | easy/03_basic_capacity | 4 | 6 | OK |
 | medium/01_dead_end_trap | 8 | 12 | OK |
 | medium/02_circular_loop | 15 | 15 | OK |
-| medium/03_priority_puzzle | 8 | 12 | OK |
+| medium/03_priority_puzzle | 7 | 12 | OK |
 | hard/01_maze_nightmare | 13 | 30 | OK |
 | hard/02_capacity_hell | 16 | 35 | OK |
 | hard/03_ultimate_challenge | 26 | 45 | OK |
