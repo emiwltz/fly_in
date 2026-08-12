@@ -1,12 +1,18 @@
-*This project has been created as part of the 42 curriculum by emiwltz.*
+*This project has been created as part of the 42 curriculum by ewltz.*
 
 # Fly-In
 
 ## Description
 
-A drone routing simulation system that navigates multiple drones through
-connected zones while minimizing simulation turns and handling movement
-constraints.
+Fly-In is a turn-based drone routing simulator. It parses a map as a weighted,
+bidirectional graph and routes a fleet of drones from one start hub to one end
+hub in as few simulation turns as possible.
+
+The implementation handles weighted zone types, blocked zones, zone and
+connection capacities, simultaneous movement, strategic waiting, and
+two-turn travel into restricted zones. It provides both the mandatory textual
+movement log and an interactive Arcade visualization. The graph and
+pathfinding logic are implemented without a graph library.
 
 ## Instructions
 
@@ -23,7 +29,13 @@ make install
 
 ### Usage
 
-Run the simulation on a map file:
+Run the simulation with the default map:
+
+```bash
+make run
+```
+
+Select another map with the `MAP` variable:
 
 ```bash
 make run MAP=maps/easy/01_linear_path.txt
@@ -34,6 +46,16 @@ Or directly:
 ```bash
 uv run python src/main.py maps/easy/01_linear_path.txt
 ```
+
+Other available Makefile rules:
+
+| Command | Purpose |
+|---|---|
+| `make debug MAP=<path>` | Run the CLI with Python's `pdb` debugger |
+| `make visual MAP=<path>` | Open the graphical simulation |
+| `make clean` | Remove Python and tool caches |
+| `make lint` | Run flake8 and mypy on `src/` |
+| `make lint-strict` | Run flake8 and mypy in strict mode |
 
 ### Example input
 
@@ -58,20 +80,32 @@ D2-goal
 ```
 
 Each movement follows the format `D<ID>-<zone>` (or `D<ID>-<connection>`
-for drones in transit toward restricted zones).
+for drones in transit toward restricted zones). A connection is printed as
+its two endpoints, for example `D1-start-restricted_hub`.
 
-### Visual mode
+## Visual Representation
 
-A graphical interface is also available:
+The graphical interface can be launched with:
 
 ```bash
-uv run python src/arcade_test.py maps/easy/01_linear_path.txt
+make visual MAP=maps/easy/01_linear_path.txt
 ```
 
-Use `A`/`D` to change maps, the arrow keys to move forward or backward one turn,
-`R` to reset, `SPACE` to move forward, and `ESC` to quit.
-The view shows the network topology, configured colors, drone positions, and
-drones currently in transit between two zones.
+It draws the network from the coordinates in the map, applies configured hub
+colors, and places a sprite for every drone. A drone traveling toward a
+restricted zone is displayed halfway along its connection. This makes the
+topology, parallel movements, waiting drones, shared hubs, bottlenecks, and
+two-turn movements easier to understand than the textual log alone.
+
+Controls:
+
+| Key | Action |
+|---|---|
+| `A` / `D` | Load the previous or next map |
+| `LEFT` / `RIGHT` | Move backward or forward by one turn |
+| `SPACE` | Move forward by one turn |
+| `R` | Reset the current simulation |
+| `ESC` | Quit |
 
 ## Maps
 
@@ -79,7 +113,7 @@ The `maps/` directory contains 10 maps across 4 difficulty levels:
 
 | Category | Maps | Drones |
 |---|---|---|
-| Easy | 3 | 2-4 |
+| Easy | 3 | 4-10 |
 | Medium | 3 | 5-6 |
 | Hard | 3 | 8-15 |
 | Challenger | 1 | 25 |
@@ -88,7 +122,7 @@ See `maps/README.md` for details on each map.
 
 ## Map Format
 
-```
+```text
 nb_drones: 5
 start_hub: hub 0 0 [color=green]
 end_hub: goal 10 10 [color=yellow]
@@ -109,10 +143,10 @@ connection: roof1-goal [max_link_capacity=2]
 
 ### Metadata
 
-- `zone=<type>` — zone type (default: `normal`)
-- `color=<value>` — optional color for visualization
-- `max_drones=<N>` — max simultaneous drones in a zone (default: 1)
-- `max_link_capacity=<N>` — max drones traversing a connection per turn (default: 1)
+- `zone=<type>`: zone type (default: `normal`)
+- `color=<value>`: optional color for visualization
+- `max_drones=<N>`: max simultaneous drones in a zone (default: 1)
+- `max_link_capacity=<N>`: max drones traversing a connection per turn (default: 1)
 
 The start and end zones have unlimited capacity.
 
@@ -127,28 +161,78 @@ The start and end zones have unlimited capacity.
 | `src/main.py` | CLI entry point |
 | `src/arcade_test.py` | Graphical visualization with Arcade |
 
-### Algorithm
+## Algorithm and Implementation Strategy
 
-- **Pathfinding**: Dijkstra finds every path with the lowest movement cost.
-  Blocked zones are ignored and, at equal cost, paths containing more
-  `priority` zones are preferred.
-- **Distribution**: Drones are assigned round-robin across the equally best
-  paths. The simulation handles waiting when capacities prevent movement.
-- **Simulation**: Each turn processes drones nearest to the destination first
-  so zones can be freed and reused during the same turn. Zone occupancy,
-  destination reservations, and bidirectional connection capacities are tracked
-  separately. A drone entering a `restricted` zone occupies the connection for
-  two simulation turns and must arrive on the second turn.
-- **Complexity**: Dijkstra runs once in `O((V + E) log V)`. Reconstructing all
-  equivalent shortest paths additionally depends on their number and length.
+### Parsing and graph construction
+
+The parser reads and validates the drone count, hubs, metadata, and
+connections. It rejects malformed directives, duplicate hubs or connections,
+unknown zones, invalid zone types, and non-positive capacities with an error
+that includes the source line. Blank lines and full-line or inline comments are
+ignored.
+
+The parsed map is converted to a custom adjacency list. Every input connection
+creates two directed `Edge` objects so movement remains bidirectional. Blocked
+zones stay in the graph for visualization but are skipped during pathfinding.
+
+### Weighted shortest paths
+
+The pathfinder uses Dijkstra's algorithm with Python's `heapq`. The cost of an
+edge is determined by the destination zone: normal and priority zones cost one
+turn, while restricted zones cost two turns. A priority penalty is used as a
+second score, so paths containing more priority zones are selected when their
+movement costs are equal.
+
+Each zone stores every predecessor that reaches it with the same best cost and
+priority score. These predecessor lists form a shortest-path subgraph. An
+explicit stack then reconstructs every equally best path without relying on
+Python recursion.
+
+### Distribution and turn scheduling
+
+Drones are assigned round-robin across the equally best paths. Paths are
+computed once before the simulation and reused on every turn; they are not
+recalculated while drones move.
+
+At each turn, drones with the fewest remaining path steps are processed first.
+This lets a drone leave a hub before another drone attempts to enter it during
+the same turn. The simulator maintains separate structures for current hub
+occupancy, reserved destinations, and bidirectional connection usage:
+
+- A move is postponed when its destination hub or connection is full.
+- Leaving a hub immediately releases its capacity for the current turn.
+- Entering a restricted zone first places the drone in transit and reserves its
+  destination.
+- A drone in transit must reach that reserved destination on the next turn.
+- A turn with no possible movement and no drone in transit is reported as a
+  deadlock instead of looping forever.
+
+### Complexity and memory
+
+Let `V` be the number of zones, `E` the number of connections, `D` the number
+of drones, `T` the number of turns, `P` the number of equally best paths, `L`
+their maximum length, and `delta` the maximum number of neighbors of a zone.
+
+- Graph construction takes `O(V + E)` time and memory.
+- Dijkstra takes `O((V + E) log V)` time and `O(V + E)` memory.
+- Path reconstruction is output-sensitive. The stored paths require
+  `O(P * L)` memory; the current list-copying implementation can take up to
+  `O(P * L^2)` time in the worst case.
+- Each simulation turn costs `O(V + D log D + D * delta)`: zone state is
+  copied, drones are sorted, then their next connection may be searched in an
+  adjacency list.
+- Total simulation time is therefore
+  `O((V + E) log V + P * L^2 + T * (V + D log D + D * delta))`.
+- Besides the graph and reconstructed paths, the simulation uses `O(V + D)`
+  state for drones, occupancy, and reservations.
 
 ## Benchmarks
 
-Current results on the provided maps (all within targets):
+Current results measured with the map files in this repository:
 
 | Map | Turns | Target | Status |
 |---|---:|---:|---|
-| easy/01_linear_path | 4 | 6 | OK |
+| easy/01_linear_path | 12 | 6 for 2 drones | Custom map uses 10 drones |
 | easy/02_simple_fork | 4 | 8 | OK |
 | easy/03_basic_capacity | 4 | 6 | OK |
 | medium/01_dead_end_trap | 8 | 12 | OK |
@@ -157,7 +241,11 @@ Current results on the provided maps (all within targets):
 | hard/01_maze_nightmare | 13 | 30 | OK |
 | hard/02_capacity_hell | 16 | 35 | OK |
 | hard/03_ultimate_challenge | 26 | 45 | OK |
-| challenger/01_the_impossible_dream | 43 | 45 | OK |
+| challenger/01_the_impossible_dream | 43 | < 45 | Record beaten |
+
+The subject's target for `easy/01_linear_path` is based on 2 drones. The copy in
+this repository has been changed to 10 drones, so its current result is not
+directly comparable to that target.
 
 ## Linting
 
@@ -165,8 +253,42 @@ Current results on the provided maps (all within targets):
 make lint
 ```
 
-Runs flake8 and mypy with the checks required by the subject.
+Runs flake8 and mypy with the configured project checks.
 
+## Resources
+
+### References
+
+- [Fly-In subject, version 1.6](fly_in_subject.pdf): project rules, input
+  format, simulation constraints, and performance targets.
+- [Python `heapq` documentation](https://docs.python.org/3/library/heapq.html):
+  priority queue used by Dijkstra's algorithm.
+- [Dijkstra's algorithm](https://cp-algorithms.com/graph/dijkstra.html):
+  weighted shortest-path principles and complexity.
+- [Breadth-first search](https://cp-algorithms.com/graph/breadth-first-search.html):
+  comparison with Dijkstra; BFS is suitable for equal-cost edges, whereas this
+  project includes two-turn restricted zones.
+- [Python Arcade documentation](https://api.arcade.academy/en/latest/): window,
+  drawing, sprite, view, and keyboard APIs used by the visualization.
+- [uv documentation](https://docs.astral.sh/uv/): dependency and virtual
+  environment management.
+- [mypy documentation](https://mypy.readthedocs.io/en/stable/) and
+  [flake8 documentation](https://flake8.pycqa.org/en/latest/): static type and
+  style checks.
+
+### Use of AI
+
+OpenCode was used as an assistant for the following tasks:
+
+- Researching relevant technical references.
+- Comparing BFS and Dijkstra to understand why weighted shortest-path search is
+  required for restricted zones.
+- Reviewing and strengthening parser validation and error handling.
+- Structuring, checking, and improving this README against the subject's
+  requirements.
+
+AI suggestions were reviewed against the subject, the implementation, and
+actual program output before being retained.
 
 ## License
 

@@ -116,12 +116,23 @@ class Pathfinder:
         start: str,
         end: str,
     ) -> list[list[str]]:
-        """Recursively rebuild every shortest path from its predecessors."""
-        if end == start:
-            return [[start]]
+        """Rebuild every shortest path from its predecessors.
 
+        Uses an explicit stack instead of recursion to avoid Python's
+        recursion limit on long paths.
+        """
         paths: list[list[str]] = []
-        for predecessor in previous[end]:
-            for path in self._build_all_paths(previous, start, predecessor):
-                paths.append(path + [end])
+        stack: list[list[str]] = [[end]]
+
+        while stack:
+            path = stack.pop()
+            current = path[0]
+
+            if current == start:
+                paths.append(path)
+                continue
+
+            for predecessor in reversed(previous[current]):
+                stack.append([predecessor] + path)
+
         return paths
