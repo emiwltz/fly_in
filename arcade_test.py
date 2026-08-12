@@ -323,7 +323,9 @@ class GameView(arcade.View):
         self.map_files = map_files or []
         self.map_index = map_index
         self.drones_sprites = (
-            build_sprites(len(sim.drones)) if sim is not None else arcade.SpriteList()
+            build_sprites(len(sim.drones))
+            if sim is not None
+            else arcade.SpriteList()
         )
 
     def on_show_view(self) -> None:
