@@ -44,7 +44,7 @@ make run MAP=maps/easy/01_linear_path.txt
 Or directly:
 
 ```bash
-uv run python src/main.py maps/easy/01_linear_path.txt
+uv run python main.py maps/easy/01_linear_path.txt
 ```
 
 Other available Makefile rules:
@@ -54,7 +54,7 @@ Other available Makefile rules:
 | `make debug MAP=<path>` | Run the CLI with Python's `pdb` debugger |
 | `make visual MAP=<path>` | Open the graphical simulation |
 | `make clean` | Remove Python and tool caches |
-| `make lint` | Run flake8 and mypy on `src/` |
+| `make lint` | Run flake8 and mypy on the project root |
 | `make lint-strict` | Run flake8 and mypy in strict mode |
 
 ### Example input
@@ -154,12 +154,12 @@ The start and end zones have unlimited capacity.
 
 | File | Responsibility |
 |---|---|
-| `src/parser.py` | Parses and validates map files |
-| `src/graph.py` | Builds adjacency list from parsed map |
-| `src/pathfinding.py` | Dijkstra shortest-path enumeration |
-| `src/drone.py` | Drone state and simulation engine |
-| `src/main.py` | CLI entry point |
-| `src/arcade_test.py` | Graphical visualization with Arcade |
+| `parser.py` | Parses and validates map files |
+| `graph.py` | Builds adjacency list from parsed map |
+| `pathfinding.py` | Dijkstra shortest-path enumeration |
+| `drone.py` | Drone state and simulation engine |
+| `main.py` | CLI entry point |
+| `arcade_test.py` | Graphical visualization with Arcade |
 
 ## Algorithm and Implementation Strategy
 

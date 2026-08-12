@@ -15,7 +15,7 @@ def main() -> int:
     Returns:
         0 on success, 1 on error.
     """
-    if len(sys.argv) < 2:
+    if len(sys.argv) != 2:
         print("Usage: python main.py <map_file>", file=sys.stderr)
         return 1
     try:
